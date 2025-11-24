@@ -1,4 +1,6 @@
-# ✨ DailyJobMatch  
+<img width="90" height="90" alt="ChatGPT 2025-11-24 17 16 20" src="https://github.com/user-attachments/assets/8c3a55fa-c731-4dd7-9fdd-edfce1430818" />
+
+# DailyJobMatch  
 ![Made with n8n](https://img.shields.io/badge/Made%20with-n8n-00e8a2?style=flat&logo=n8n) 
 ![Powered by OpenAI](https://img.shields.io/badge/Powered%20by-OpenAI-412991?style=flat&logo=openai)
 ![Docker](https://img.shields.io/badge/Run%20with-Docker-2496ED?style=flat&logo=docker)
