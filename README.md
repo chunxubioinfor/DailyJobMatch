@@ -19,3 +19,9 @@ DailyJobMatch automates your job search by running every morning, collecting fre
 
 ### 🏗️ Architecture Diagram
 
+<img width="2268" height="386" alt="image" src="https://github.com/user-attachments/assets/7ceafeef-1611-4131-9f8b-03a719967199" />
+<img width="1404" height="324" alt="image" src="https://github.com/user-attachments/assets/35ac42d9-fd13-462c-9420-3dffaf5c52ea" />
+
+
+
+
