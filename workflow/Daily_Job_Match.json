@@ -1,0 +1,2846 @@
+{
+  "name": "Daily_Job_Match",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 7
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        576
+      ],
+      "id": "18d2245c-4d51-4ed6-bb85-9e37cc479ef6",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        672,
+        576
+      ],
+      "id": "6aa59d98-a12f-4e35-b30e-5757b7c5d47d",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apify.com/v2/acts/curious_coder~linkedin-jobs-scraper/run-sync-get-dataset-items?token= {{ $('Config').item.json.apifyDatasetUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Config').item.json.apifyDatasetUrl }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n    \"count\": 100,\n    \"scrapeCompany\": true,\n    \"urls\": [\n        \"https://www.linkedin.com/jobs/search?keywords=Data&location=Copenhagen%20Municipality&geoId=106743989&f_JT=F%2CC%2CI&f_TPR=r86400&f_WT=1&position=1&pageNum=0\",\n        \"https://www.linkedin.com/jobs/search?keywords=Data%20Scientist&location=Copenhagen%20Municipality&geoId=106743989&f_JT=F%2CC%2CI&f_TPR=r86400&f_WT=1&position=1&pageNum=0\",\n        \"https://www.linkedin.com/jobs/search?keywords=Data%20Engineer&location=Copenhagen%20Municipality&geoId=106743989&f_JT=F%2CC%2CI&f_TPR=r86400&f_WT=1&position=1&pageNum=0\",\n        \"https://www.linkedin.com/jobs/search?keywords=Bioinformatics&location=Copenhagen%20Municipality&geoId=106743989&f_JT=F%2CC%2CI&f_TPR=r86400&f_WT=1&position=1&pageNum=0\"\n    ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1120,
+        576
+      ],
+      "id": "71a72e99-46b6-422e-80a5-e1a1a9c15556",
+      "name": "Linkedin"
+    },
+    {
+      "parameters": {
+        "subject": "Daily Job Dose",
+        "message": "={{ $json.html }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        3856,
+        576
+      ],
+      "id": "975f73c8-6d50-4dcf-a2dc-9990a751ff83",
+      "name": "Send a message",
+      "webhookId": "a7f1bd8e-c66a-4713-b9c7-01831e564fa5",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "fK4nSXPTrHAp6uWV",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a professional AI assistant that evaluates how well a candidate’s CV fits a specific job.\n\n## GOAL\nCompare the candidate’s CV and the job description, evaluate their fit across defined categories, and return **STRICT JSON only**.\n\n---\n\n### INPUTS\n- Candidate CV:\n{{ $json.cv_text }}\n- Job description:\n{{ $json.job_text }}\n\n---\n\n### TASKS\n1. **Understand the role**  \n   - Write a neutral 2–3-sentence summary of what the job is about.  \n   - Extract 3–5 concise keywords that capture its main technical and domain focus.\n\n2. **Assess fit**  \n   - Produce 2–3 short bullet points showing how the candidate’s background or experience matches the role.  \n   - Write a short connector (1–2 sentences) that links the candidate’s profile to the job’s mission or company focus.\n\n3. **Score fit across categories**\n\n| Category | Range | Guidance |\n|-----------|-------|-----------|\n| background_match | 0–10 | 10 = explicitly mentions bioinformatics or identical field; 6–9 = biotech/pharma data roles; 0 = unrelated domain |\n| skills_overlap | 0–30 | Compare coding, analysis, statistics, data tools, and soft skills appearing in both CV and job text |\n| experience_relevance | 0–30 | Check if candidate’s project or work experience aligns with listed responsibilities and requirements |\n| seniority | 0–10 | 10 = entry-level or junior; 0 = manager/executive |\n| language_requirement | 0–10 | 0 = requires fluent Danish; 10 = English-friendly or international |\n| company_score | 0–10 | 10 = large or international pharma/biotech; 5 = medium data-driven company; 0 = unrelated small local firm |\n\nThen compute  \n`overall = background_match + skills_overlap + experience_relevance + seniority + language_requirement + company_score`\n\n---\n\n### RULES\n- Use only information found in the CV and job text.  \n- Return one **valid JSON object** exactly matching the schema below.  \n- No explanations or natural-language text outside the JSON.  \n- `score.overall` must equal the sum of sub-scores.\n\n---\n\n### OUTPUT SCHEMA\n{\n  \"score\": {\n    \"overall\": (0–100),\n    \"background_match\": (0–10),\n    \"skills_overlap\": (0–30),\n    \"experience_relevance\": (0–30),\n    \"seniority\": (0–10),\n    \"language_requirement\": (0–10),\n    \"company_score\": (0–10)\n  },\n  \"summary\": \"2–3 sentence neutral summary of the role\",\n  \"keywords\": [\"keyword1\",\"keyword2\",\"keyword3\"],\n  \"fit_bullets\": [\n    \"bullet1\",\n    \"bullet2\"\n  ],\n  \"connector\": \"1–2 sentences linking the candidate’s experience to this role\"\n}\n\n---\n\n### OUTPUT EXAMPLE\n{\n  \"score\": {\n    \"overall\": 82,\n    \"background_match\": 8,\n    \"skills_overlap\": 24,\n    \"experience_relevance\": 25,\n    \"seniority\": 9,\n    \"language_requirement\": 8,\n    \"company_score\": 8\n  },\n  \"summary\": \"This is an entry-level data-science position within a biotech analytics team focusing on experimental design and data visualization.\",\n  \"keywords\": [\"Python\",\"data analysis\",\"bioinformatics\",\"pipelines\"],\n  \"fit_bullets\": [\n    \"Developed and maintained R/Python pipelines for omics data at DTU HealthTech.\",\n    \"Experience in transcriptomics and proteomics aligns with the company’s analytical workflows.\"\n  ],\n  \"connector\": \"The candidate’s background in multi-omics data analysis and software development directly supports the analytical needs of this biotech data-science role.\"\n}",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        2208,
+        400
+      ],
+      "id": "2514de0d-5610-40f2-b1da-fbfd0db4fa28",
+      "name": "Score the job and extract",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0619efc8-36c0-40ae-a873-68be9b0bbf3b",
+              "name": "apifyDatasetUrl",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "54e1280f-5944-4d35-9c9a-e52694c4c5eb",
+              "name": "gmailTo",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "a5a26dc1-d939-4aee-a01e-94166fb0fa71",
+              "name": "topDetailed",
+              "value": "5",
+              "type": "string"
+            },
+            {
+              "id": "66633cbc-76c5-47af-8c1b-3af64626a711",
+              "name": "topTotal",
+              "value": "15",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        576
+      ],
+      "id": "9051c35d-5a66-4c0f-8ec4-db6c3f1636da",
+      "name": "Config"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        448,
+        576
+      ],
+      "id": "06e485fc-5d6f-4d57-8d23-62dcdea5ad05",
+      "name": "RetrieveCV",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "ahvH03hQufXZhNWv",
+          "name": "Google Drive account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Normalize a single LinkedIn (Apify) item\nconst j = $json;\n\nreturn {\n  source: 'linkedin',\n\n  id: j.id || '',\n  title: (j.title || '').trim(),\n  company: (j.companyName || '').trim(),\n  location: (j.location || '').trim(),\n\n  url: (j.link || j.applyUrl || '').trim(),\n  apply_url: j.applyUrl || '',\n  posted_at: j.postedAt || new Date().toISOString(),\n\n  seniority_level: j.seniorityLevel || '',\n  employment_type: j.employmentType || '',\n  job_function: j.jobFunction || '',\n  industries: j.industries || '',\n  salary: j.salary || '',\n\n  raw_description: String(j.descriptionText || j.description || ''),\n\n  company_website: j.companyWebsite || '',\n  company_linkedin: j.companyLinkedinUrl || '',\n  company_slogan: j.companySlogan || '',\n  company_description: j.companyDescription || '',\n  company_employees: j.companyEmployeesCount ?? null,\n  company_logo: j.companyLogo || '',\n  company_address: j.companyAddress\n    ? [\n        j.companyAddress.streetAddress,\n        j.companyAddress.addressLocality,\n        j.companyAddress.addressRegion,\n        j.companyAddress.postalCode,\n        j.companyAddress.addressCountry,\n      ]\n        .filter(Boolean)\n        .join(', ')\n    : '',\n\n  text_for_matching: [\n    j.title,\n    j.companyName,\n    j.location,\n    j.descriptionText,\n    j.companyDescription,\n  ]\n    .filter(Boolean)\n    .join(' — ')\n    .replace(/\\s+/g, ' ')\n    .slice(0, 20000),\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1344,
+        576
+      ],
+      "id": "efd436d5-e6a1-4e16-9829-d48d3f136e5f",
+      "name": "NormalizeData"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Function node (NOT Function Item)\n\n// stable hash\nfunction hashKey(title, company, url) {\n  const s = (title || '') + '|' + (company || '') + '|' + (url || '');\n  let h = 5381; \n  for (let i = 0; i < s.length; i++) h = ((h << 5) + h) + s.charCodeAt(i);\n  return (h >>> 0).toString(16);\n}\n\n// ban list\nconst BAN = [\n  /student\\s*(assistant|helper)?/i,\n  /\\bstudent\\b/i,\n  /studenter/i,\n  /\\bpost[- ]?doc(toral)?\\b/i,\n  /\\bpraktikant\\b/i,\n];\n\nconst input = $input.all();\nconst seen = new Set();\nconst out = [];\n\nfor (let i = 0; i < input.length; i++) {\n  const src = input[i];\n  const j = { ...(src.json || {}) }; // shallow clone\n\n  // ban check\n  const hay = ((j.title || '') + ' ' + (j.raw_description || '')).toLowerCase();\n  if (BAN.some(re => re.test(hay))) continue;\n\n  // dedupe\n  const k = hashKey(\n    (j.title || '').toLowerCase(),\n    (j.company || '').toLowerCase(),\n    (j.url || '').toLowerCase()\n  );\n  if (seen.has(k)) continue;\n  seen.add(k);\n\n  j.hash = k;\n\n  // preserve pairing so downstream nodes don't complain\n  out.push({\n    json: j,\n    pairedItem: { item: i }\n  });\n}\n\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        576
+      ],
+      "id": "f439b8cd-2c4a-4365-ba2a-e684cdd1527b",
+      "name": "Filter and deduplicate"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6bdc4c8e-3891-4c52-a7c5-3d8dd0565be6",
+              "name": "cv_text",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        896,
+        576
+      ],
+      "id": "1f8078cb-bc08-4e07-a28e-c9e6c32eba38",
+      "name": "MapResume"
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        2016,
+        208
+      ],
+      "id": "a030475b-f139-417f-82dc-1165ee43a0d4",
+      "name": "Loop Over Items",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "name": "Replace Me",
+      "typeVersion": 1,
+      "position": [
+        2384,
+        0
+      ],
+      "id": "0138f84e-169c-4366-b59d-edcc42c8269a"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"score\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"overall\": { \"type\": \"number\" },\n        \"background_match\": { \"type\": \"number\" },\n        \"skills_overlap\": { \"type\": \"number\" },\n        \"experience_relevance\": { \"type\": \"number\" },\n        \"seniority\": { \"type\": \"number\" },\n        \"language_requirement\": { \"type\": \"number\" },\n        \"company_score\": { \"type\": \"number\" }\n      },\n      \"required\": [\n        \"overall\",\n        \"background_match\",\n        \"skills_overlap\",\n        \"experience_relevance\",\n        \"seniority\",\n        \"language_requirement\",\n        \"company_score\"\n      ]\n    },\n    \"summary\": { \"type\": \"string\" },\n    \"keywords\": {\n      \"type\": \"array\",\n      \"items\": { \"type\": \"string\" }\n    },\n    \"fit_bullets\": {\n      \"type\": \"array\",\n      \"items\": { \"type\": \"string\" }\n    },\n    \"connector\": { \"type\": \"string\" }\n  },\n  \"required\": [\"score\", \"summary\", \"keywords\", \"fit_bullets\", \"connector\"]\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        2320,
+        608
+      ],
+      "id": "e2cc8110-63d6-4cc3-a00e-aafe65c74644",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        2320,
+        768
+      ],
+      "id": "83428f34-c0e7-40f6-b63b-c55ded331195",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "FjNKVa4RkOKoeEEX",
+          "name": "OpenAi account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        2176,
+        592
+      ],
+      "id": "78a3b01c-de7d-4e41-9a0e-bba47ba5703c",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "FjNKVa4RkOKoeEEX",
+          "name": "OpenAi account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "**Schedule Trigger:**\n- Starts the workflow automatically each morning 7:30 ",
+        "height": 320,
+        "width": 256,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -96,
+        432
+      ],
+      "typeVersion": 1,
+      "id": "02ababb6-924a-40d1-bd64-af5aad17df4f",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "**Configuration**: \nDefines all key workflow parameters such as \n- API tokens, \n- URLs\n- email settings \n",
+        "height": 320
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        160,
+        432
+      ],
+      "typeVersion": 1,
+      "id": "1a6c13ad-0348-4521-89aa-75345925e3f6",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "**CV Retrieval and Preprocessing**:\n- Downloads the latest version of your CV from Google Drive\n- Converts your CV PDF into plain text for downstream analysis.\n- Stores and labels the extracted CV text in a consistent field for use by the AI agent.",
+        "height": 320,
+        "width": 640,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        400,
+        432
+      ],
+      "typeVersion": 1,
+      "id": "b60da7e8-9aec-438b-be73-aabdcfb28592",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "**Job Data Collection and Preprocessing:**\n- Collects fresh job postings from LinkedIn\n- Standardises all job fields\n- Removes duplicates and filters out irrelevant roles with defined keywords\n- Combines each job description with your extracted CV text ",
+        "height": 320,
+        "width": 864,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1040,
+        432
+      ],
+      "typeVersion": 1,
+      "id": "cd00ad99-0c38-499a-9a3a-5cd7b3bbac65",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// === Prepare compact prompt input for the AI scoring agent ===\n\n// Fetch your CV text from the earlier node\n// (Change 'MapResume' to your actual node name that contains cv_text)\nconst cv_text = $('MapResume').item.json.cv_text;\n\nconst job = $json;\n\n// limit long job text to avoid token waste\nconst maxDesc = 5000; // ~1000 words\nconst cleanDesc = (job.raw_description || '')\n  .replace(/\\s+/g, ' ')\n  .trim()\n  .slice(0, maxDesc);\n\n// build a structured summary text block for LLM\nconst jobTextBlock = [\n  `Job title: ${job.title || ''}`,\n  `Company: ${job.company || ''}`,\n  job.location ? `Location: ${job.location}` : '',\n  job.seniority_level ? `Seniority: ${job.seniority_level}` : '',\n  job.employment_type ? `Employment type: ${job.employment_type}` : '',\n  job.industries ? `Industry: ${job.industries}` : '',\n  job.job_function ? `Function: ${job.job_function}` : '',\n  '',\n  'Job Description:',\n  cleanDesc,\n].filter(Boolean).join('\\n');\n\n// return one item per job\nreturn {\n  job_text: jobTextBlock,\n  cv_text: cv_text.slice(0, 10000), // safety cap\n  job_meta: {\n    title: job.title || '',\n    company: job.company || '',\n    url: job.url || job.apply_url || '',\n    hash: job.hash || '',\n    location: job.location || '',\n    posted_at: job.posted_at || '',\n    source: job.source || 'LinkedIn'\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        576
+      ],
+      "id": "a55aa859-8ab0-4dea-a353-12b4e4a29c8c",
+      "name": "Prepare AI Input"
+    },
+    {
+      "parameters": {
+        "content": "**(Optional) Batch Running:**\n- Runs the AI agent in controlled batches \ninstead of sending all items at once.\n-  Reassembles and outputs all processed \nbatches into a single, continuous dataset.",
+        "height": 400,
+        "width": 672,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1904,
+        -32
+      ],
+      "typeVersion": 1,
+      "id": "96dcce07-8be1-4903-8934-b0bef673c396",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n**AI Scoring and Structured Output:**\nScore the Job and Extract:\n• Compares each job with your CV to assess fit.\n• Evaluates across categories (skills, background, experience, etc.).\n• Generates structured JSON with score breakdown, summary, and fit notes.\nStructured Output Parser:\n• Validates and enforces correct JSON format.\n• Ensures every AI response follows the defined schema before merging.\n\n\n",
+        "height": 656,
+        "width": 672,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1904,
+        368
+      ],
+      "typeVersion": 1,
+      "id": "2268894a-fce4-4a3e-8256-88bb09d4714f",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2960,
+        576
+      ],
+      "id": "20be4750-a764-4540-9dfc-c8642a3cbb32",
+      "name": "Merge Scores + Meta"
+    },
+    {
+      "parameters": {
+        "content": "**Parse & Merge Results**\n- Convert the chat model’s text response into a clean JSON object\n- Attach job metadata back onto the parsed LLM output.",
+        "height": 320,
+        "width": 544,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2576,
+        416
+      ],
+      "typeVersion": 1,
+      "id": "fc6ca51f-902a-47a8-a65a-3149da67665c",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Function Item version – returns ONE object\n\nlet raw;\n\nif (typeof $json.output === 'string') {\n  raw = $json.output;\n} else if ($json.choices?.[0]?.message?.content) {\n  raw = $json.choices[0].message.content;\n} else {\n  raw = JSON.stringify($json);\n}\n\nraw = raw.trim();\nraw = raw.replace(/^```json/i, '').replace(/```$/, '').trim();\n\nlet data;\ntry {\n  data = JSON.parse(raw);\n} catch (e) {\n  const m = raw.match(/\\{[\\s\\S]*\\}/);\n  if (m) {\n    try { data = JSON.parse(m[0]); }\n    catch (e2) { data = { parse_error: e2.message, raw }; }\n  } else {\n    data = { parse_error: e.message, raw };\n  }\n}\n\n// return a single object (Function Item requires an object)\nreturn data;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2672,
+        496
+      ],
+      "id": "462c2cf6-086f-4197-97e2-6841a4732210",
+      "name": "Parse LLM JSON"
+    },
+    {
+      "parameters": {
+        "content": "**Top 15 Selection:**\n- Order jobs from best to worst fit\n- Keeps only the top 15 best-fit jobs for report and email",
+        "height": 320,
+        "width": 448,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3120,
+        416
+      ],
+      "typeVersion": 1,
+      "id": "4ee6e5cf-e9f8-496b-838a-15e4ce72e5c5",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "sortFieldsUi": {
+          "sortField": [
+            {
+              "fieldName": "output.score.overall",
+              "order": "descending"
+            }
+          ]
+        },
+        "options": {
+          "disableDotNotation": false
+        }
+      },
+      "type": "n8n-nodes-base.sort",
+      "typeVersion": 1,
+      "position": [
+        3184,
+        576
+      ],
+      "id": "ba7517f7-e30f-4010-aa09-fe6c794bf6b7",
+      "name": "Rank by Overall Score"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Keep first 15 highest-scoring items (already sorted)\nconst items = $input.all();\nconst top = items.slice(0, 15);\nreturn top; // they are already {json: ...} items"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3408,
+        576
+      ],
+      "id": "426ec325-d00d-48a0-a527-901a955c3026",
+      "name": "Top 15 Slice"
+    },
+    {
+      "parameters": {
+        "jsCode": "// === Beautiful, consistent HTML for Top jobs (dark theme, robust to nested fields) ===\nfunction esc(s){return String(s??'').replace(/[<&>]/g,m=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[m]));}\n\n// Accept {json:{...}} or plain {...}\nconst raws = $input.all();\nconst items = raws.map(it => (it && typeof it==='object' && 'json' in it) ? it.json : it);\n\n// Helpers\nconst titleCase = s => String(s||'')\n  .toLowerCase()\n  .replace(/\\b([a-z])/g, m => m.toUpperCase());\n\nfunction pick(i){\n  const out  = i.output   || {};\n  const meta = i.job_meta || {};\n  const keywords = Array.isArray(out.keywords) ? out.keywords : [];\n  const bullets  = Array.isArray(out.fit_bullets) ? out.fit_bullets.slice(0,3) : [];\n  const overall  = (out.score && out.score.overall!=null) ? out.score.overall : '';\n  return {\n    title: meta.title || '',\n    company: meta.company || '',\n    location: meta.location || '',\n    url: meta.url || i.url || i.apply_url || '#',\n    score: overall,\n    summary: out.summary || '',\n    bullets,\n    connector: out.connector || '',\n    chips: keywords.slice(0,6).map(titleCase)\n  };\n}\n\nfunction scoreColor(n){\n  if (n==='' || isNaN(n)) return '#9aa0a6';\n  n = Number(n);\n  if (n >= 85) return '#22c55e'; // green\n  if (n >= 70) return '#3b82f6'; // blue\n  if (n >= 55) return '#eab308'; // amber\n  return '#f97316';              // orange\n}\n\nconst style = `\n  body{margin:0;background:#0f1115;color:#e6e7eb;font-family:ui-sans-serif,system-ui,Arial}\n  .wrap{max-width:820px;margin:0 auto;padding:28px}\n  h2{margin:0 0 18px 0;font-size:22px;letter-spacing:.2px}\n  .card{border:1px solid #232635;background:#151821;border-radius:14px;padding:18px 20px;margin:16px 0;box-shadow:0 2px 6px rgba(0,0,0,.25)}\n  .title{margin:0;font-size:18px;font-weight:800;color:#8ab4ff}\n  .meta{margin:6px 0 10px 0;color:#b6bcc8;font-size:12px}\n  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}\n  .badge{display:inline-block;border:1px solid rgba(255,255,255,.08);padding:2px 10px;border-radius:999px;font-size:12px}\n  .score{font-weight:800}\n  .score-pill{display:inline-block;padding:3px 10px;border-radius:999px;font-weight:800;background:#1f2937;color:#fff;border:1px solid rgba(255,255,255,.08)}\n  .chips{margin:2px 0 8px 0}\n  .chip{display:inline-block;margin:6px 8px 0 0;padding:4px 10px;border-radius:999px;font-size:12px;\n        background:#1e2330;border:1px solid #2a3244;color:#cbd5e1}\n  .summary{margin:8px 0 8px 0;line-height:1.55;font-size:13px;color:#e0e3ea}\n  ul{margin:8px 0 0 18px;padding:0}\n  li{margin:6px 0;line-height:1.45;font-size:13px; color:#e0e3ea;}\n  .connector{margin:12px 0 0 0;color:#c7cbd6;font-size:13px}\n  .btn{display:inline-block;margin-top:12px;padding:10px 14px;border-radius:10px;background:#3b82f6;color:#fff !important;\n       text-decoration:none;font-weight:700;font-size:13px;border:1px solid #315fd1}\n  .divider{height:1px;background:#232635;margin:12px 0;border-radius:1px}\n  .footer{margin-top:20px;color:#9aa0a6;font-size:12px}\n`;\n\nfunction card(item){\n  const j = pick(item);\n  const sc = j.score === '' ? '—' : String(j.score);\n  const scColor = scoreColor(j.score);\n  const chips = j.chips.length ? `<div class=\"chips\">${j.chips.map(c=>`<span class=\"chip\">${esc(c)}</span>`).join('')}</div>` : '';\n  const bullets = j.bullets.length ? `<ul>${j.bullets.map(b=>`<li>${esc(b)}`).join('')}</ul>` : '';\n  const connector = j.connector ? `<div class=\"connector\">${esc(j.connector)}</div>` : '';\n  return `\n    <div class=\"card\">\n      <div class=\"row\" style=\"justify-content:space-between\">\n        <h3 class=\"title\">${esc(j.title)}</h3>\n        <span class=\"score-pill\" style=\"border-color:${scColor};color:${scColor}\">Score: ${sc}/100</span>\n      </div>\n      <div class=\"meta\">${esc(j.company)} — ${esc(j.location)}</div>\n      ${chips}\n      <div class=\"summary\">${esc(j.summary)}</div>\n      ${bullets}\n      ${connector}\n      <div class=\"divider\"></div>\n      <a class=\"btn\" href=\"${esc(j.url)}\" target=\"_blank\">View & Apply</a>\n    </div>\n  `;\n}\n\nconst html = `\n<!doctype html>\n<html>\n<head><meta charset=\"utf-8\"><style>${style}</style></head>\n<body>\n  <div class=\"wrap\">\n    <h2>🔥 Your Top ${items.length} Job Matches Today</h2>\n    ${items.map(card).join('\\n')}\n    <div class=\"footer\">Sent by your Job Agent at ${new Date().toLocaleString()}.</div>\n  </div>\n</body>\n</html>\n`;\n\n// Return correct shape for your node type\nconst first = $input.first();\nconst isFunctionNode = first && typeof first==='object' && 'json' in first;\nreturn isFunctionNode ? [{ json: { html } }] : { html };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3632,
+        576
+      ],
+      "id": "edadfc72-60cc-4295-8115-32b54e6c4cdd",
+      "name": "Build Email HTML"
+    },
+    {
+      "parameters": {
+        "content": "**Output & Notification**\n- Generates a clean, formatted HTML summary of your top job matches\n- Delivers the daily AI-filtered job report directly to your inbox.",
+        "height": 320,
+        "width": 448,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3568,
+        416
+      ],
+      "typeVersion": 1,
+      "id": "015f3780-a771-452a-ac37-7c637b2f6807",
+      "name": "Sticky Note8"
+    }
+  ],
+  "pinData": {
+    "Score the job and extract": [
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 30,
+              "background_match": 0,
+              "skills_overlap": 10,
+              "experience_relevance": 0,
+              "seniority": 10,
+              "language_requirement": 10,
+              "company_score": 0
+            },
+            "summary": "This is an entry-level Junior Buyer position in the Kids department at Boozt, an e-commerce fashion retailer. The role involves supporting the buying and merchandising team with order management, assortment planning for a small brand portfolio, ensuring smooth delivery processes, and building supplier relationships.",
+            "keywords": [
+              "Buying",
+              "Retail",
+              "Order Management",
+              "Supplier Relationships",
+              "Fashion"
+            ],
+            "fit_bullets": [
+              "The candidate demonstrates strong organizational skills and the ability to multitask in fast-paced research environments, which are relevant for managing order flow and operational tasks.",
+              "Experience in client and KOL engagement at Illuminera (IQVIA) shows an ability to build professional relationships, a key requirement for supplier interactions.",
+              "Proficient English language skills meet the job's explicit requirement for excellent verbal and written English."
+            ],
+            "connector": "While Chunxu's primary experience is in bioinformatics and biotech, the transferable soft skills in organization, relationship building, and working in dynamic environments could be applied to a junior buyer role in a fast-paced retail company."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 35,
+              "background_match": 0,
+              "skills_overlap": 25,
+              "experience_relevance": 0,
+              "seniority": 10,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "The role is a graduate position in Property Financing Technology at Nykredit, focusing on developing and maintaining IT solutions for mortgage systems. It involves working across the full development lifecycle, from analysis and design to testing and deployment.",
+            "keywords": [
+              "IT solutions",
+              "Mortgage systems",
+              "Development lifecycle",
+              "Java",
+              "Banking"
+            ],
+            "fit_bullets": [
+              "The candidate demonstrates strong programming and development process skills, specifically in creating and maintaining bioinformatics tools and pipelines, which are transferable to IT solution development.",
+              "Their experience includes complex problem-solving, data management, and collaborative teamwork, aligning with the job's emphasis on tackling challenging issues within a team."
+            ],
+            "connector": "Despite a primary background in bioinformatics, the candidate's general aptitude for software development, systematic problem-solving, and team collaboration could be leveraged in this IT development role."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 36,
+              "background_match": 0,
+              "skills_overlap": 15,
+              "experience_relevance": 8,
+              "seniority": 10,
+              "language_requirement": 0,
+              "company_score": 3
+            },
+            "summary": "This is a 10-month graduate program in Wealth Technology at Nykredit, a Danish bank. Graduates will learn to build modern software for financial platforms like Summit and Simcorp Dimension, gaining a deep understanding of financial business processes from front to back office, while utilizing AI tools in development.",
+            "keywords": [
+              "Wealth Technology",
+              "Financial Platforms",
+              "Software Development",
+              "AI Tools",
+              "Banking"
+            ],
+            "fit_bullets": [
+              "Developed and maintained software (IsoformSwitchAnalyzeR) and bioinformatics pipelines, demonstrating transferable software development skills relevant to building modern software.",
+              "Possesses an AI-driven mindset from Machine Learning and Deep Learning coursework, aligning with the job's active use of AI tools like GitHub Copilot and chat bots.",
+              "Strong SQL and database handling experience from academic projects, which can be applied to managing data within financial platforms."
+            ],
+            "connector": "While Chunxu's domain expertise lies in bioinformatics, their strong foundation in software development, data management, and AI tools provides a transferable skill set for a graduate role focused on building modern financial technology solutions."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 36,
+              "background_match": 1,
+              "skills_overlap": 10,
+              "experience_relevance": 5,
+              "seniority": 9,
+              "language_requirement": 10,
+              "company_score": 1
+            },
+            "summary": "This role is for a Back-End Developer at Boozt, an e-commerce company. The position involves strengthening business systems, building AI-oriented solutions using modern PHP technologies, and driving business intelligence and platform efficiency. The developer will work with autonomy to deliver innovative, proprietary solutions in a fast-paced environment.",
+            "keywords": [
+              "PHP",
+              "Back-End Development",
+              "E-commerce",
+              "AI solutions",
+              "Platform efficiency"
+            ],
+            "fit_bullets": [
+              "Candidate has strong programming skills in Python, R, Bash, and SQL, which are transferable to a development role, although specific PHP experience is not mentioned.",
+              "Experience with building and maintaining pipelines and software (IsoformSwitchAnalyzeR) demonstrates general software development capabilities and problem-solving skills.",
+              "Candidate mentions an \"AI-driven mindset\" and exploring machine learning methods, aligning with the job's focus on AI-oriented solutions for business intelligence."
+            ],
+            "connector": "While the candidate's background is primarily in bioinformatics and scientific software development, their strong programming foundation, experience with data management, and AI-driven approach could be applied to develop robust back-end solutions for an e-commerce platform."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 16,
+              "background_match": 0,
+              "skills_overlap": 6,
+              "experience_relevance": 0,
+              "seniority": 10,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "This graduate position within Nykredit's Treasury & Risk Platforms department focuses on developing IT solutions for financial operations, risk management, and regulatory compliance. The role involves working with modern technologies like C# and Kubernetes to build scalable systems and contribute to the company's financial foundation. It is a structured 10-month program designed for recent master's graduates.",
+            "keywords": [
+              "C#",
+              "Kubernetes",
+              "Financial IT",
+              "Risk Management",
+              "Banking"
+            ],
+            "fit_bullets": [
+              "The candidate possesses strong general programming skills in Python, R, and SQL, and experience in developing and maintaining complex data pipelines and software tools, which are fundamental to IT development.",
+              "The candidate's experience with project management, independent problem-solving, and collaborative teamwork aligns with the role's emphasis on individual responsibility and team engagement.",
+              "The candidate's academic background includes Machine Learning and Deep Learning courses, demonstrating an AI-driven mindset for formulating projects and developing new tools."
+            ],
+            "connector": "While the candidate's background is primarily in bioinformatics and biotech, their robust experience in data management, software development, and modern computational approaches could be transferable to the financial IT domain with focused learning. The structured graduate program could offer the necessary bridge for this career transition to a new industry."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 69,
+              "background_match": 3,
+              "skills_overlap": 20,
+              "experience_relevance": 22,
+              "seniority": 6,
+              "language_requirement": 10,
+              "company_score": 8
+            },
+            "summary": "This role is for a Mid-Senior Software Engineer at the LEGO Group, focusing on building a platform for designer tools. The engineer will develop backend services using Python and FastAPI, manage databases like Neo4j and Postgres, and integrate workflow systems. The position aims to improve designer efficiency by transforming creative ideas into tangible products.",
+            "keywords": [
+              "Software Engineer",
+              "Python",
+              "Backend",
+              "Databases",
+              "Designer Tools"
+            ],
+            "fit_bullets": [
+              "The candidate possesses strong programming skills in Python and SQL, which are fundamental for backend development and database management as required by the role.",
+              "Their experience in developing and maintaining bioinformatics pipelines and software tools demonstrates proficiency in structured software development and problem-solving.",
+              "Work with GitHub for issue tracking and version control aligns with the job's emphasis on GitHub DevOps practices and CI/CD tools."
+            ],
+            "connector": "While the candidate's primary domain is bioinformatics, their extensive experience in software development, data management, and pipeline optimization aligns with the core technical demands of building robust software for creative design at LEGO."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 38,
+              "background_match": 3,
+              "skills_overlap": 5,
+              "experience_relevance": 2,
+              "seniority": 9,
+              "language_requirement": 10,
+              "company_score": 9
+            },
+            "summary": "This is an entry-level Mobile Engineer role at Teton, a company leveraging AI to support healthcare workers. The position focuses on developing and optimizing a React Native mobile application that serves as the primary interface for caregivers in clinical settings. The role requires strong UI/UX skills, robust coding practices, and contributions to technical and product direction.",
+            "keywords": [
+              "React Native",
+              "Mobile Development",
+              "Healthcare AI",
+              "UI/UX",
+              "TypeScript"
+            ],
+            "fit_bullets": [
+              "The candidate possesses general programming skills (Python, R) and experience in software development and maintenance, including contributing to open-source projects.",
+              "Chunxu Han has a strong academic and work background in bioinformatics and the pharmaceutical/biotech industry, aligning with the company's healthcare domain.",
+              "The candidate has strong soft skills such as communication, teamwork, and problem-solving, which are valuable in a collaborative development environment."
+            ],
+            "connector": "While Chunxu's extensive background is in bioinformatics and data science within the biotech/pharma industry, their enthusiasm to apply their skills in impactful areas like healthcare aligns with Teton's mission. However, the core technical requirements for mobile engineering with React Native are not directly covered in their current profile."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 46,
+              "background_match": 6,
+              "skills_overlap": 10,
+              "experience_relevance": 8,
+              "seniority": 2,
+              "language_requirement": 10,
+              "company_score": 10
+            },
+            "summary": "The role is for a MES Specialist at NNE, focusing on coordinating the development of master batch records, acting as a solution architect for MES systems, and ensuring compliant integration with other manufacturing systems in API pharmaceutical production.",
+            "keywords": [
+              "MES",
+              "PAS-X",
+              "GXP",
+              "Pharma Manufacturing",
+              "System Integration"
+            ],
+            "fit_bullets": [
+              "Candidate has experience in developing and maintaining data resources and bioinformatics pipelines, demonstrating transferable skills in workflow design and system development.",
+              "Experience with SQL, database handling, and version control (Git) indicates a foundational understanding applicable to managing complex data systems.",
+              "Currently a Master Student at Novo Nordisk, showing existing familiarity with the broader organizational context relevant to NNE."
+            ],
+            "connector": "While the candidate's primary expertise lies in bioinformatics, their strong background in data management, software development, and pipeline optimization within the biotech/pharma domain could offer a fresh perspective on manufacturing IT challenges at NNE."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 12,
+              "background_match": 1,
+              "skills_overlap": 6,
+              "experience_relevance": 0,
+              "seniority": 0,
+              "language_requirement": 2,
+              "company_score": 3
+            },
+            "summary": "This role is for a Regional Sales Manager at Splunk, a Cisco company, responsible for driving sales and managing strategic Enterprise accounts in Denmark. The position involves engaging with C-level executives, collaborating with partners, and working within a fast-paced sales environment to achieve revenue targets.",
+            "keywords": [
+              "Sales",
+              "Enterprise Accounts",
+              "Business Development",
+              "C-level Engagement",
+              "Software Sales"
+            ],
+            "fit_bullets": [
+              "The candidate has gained client engagement and communication skills as a Consulting Intern at Illuminera (IQVIA), where they conducted market research and translated data into actionable insights for pharmaceutical clients.",
+              "Experience with project management and collaborating with cross-functional teams, as seen in the Master Student and Research Assistant roles, demonstrates an ability to work effectively in a team-oriented sales environment.",
+              "The candidate lists \"Client Engagement\" as a soft skill, which aligns with the job's requirement for building professional relationships and engaging with customers."
+            ],
+            "connector": "While the candidate's core background is in bioinformatics research, their experience in client engagement and communication within the pharmaceutical industry provides a foundational understanding of strategic customer interaction, which could be transferrable to a sales environment."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 32,
+              "background_match": 1,
+              "skills_overlap": 10,
+              "experience_relevance": 8,
+              "seniority": 0,
+              "language_requirement": 10,
+              "company_score": 3
+            },
+            "summary": "This Founding Engineer role at earli involves building and scaling the core product architecture for a fast-growing SaaS company. It requires strong engineering craftsmanship, a product-driven mindset, and an entrepreneurial spirit to develop impactful commercial solutions.",
+            "keywords": [
+              "Software Architecture",
+              "SaaS",
+              "Product Engineering",
+              "Scalability",
+              "Entrepreneurship"
+            ],
+            "fit_bullets": [
+              "Chunxu has experience developing and maintaining the IsoformSwitchAnalyzeR R package, handling GitHub issues, and planning updates, which demonstrates relevant software development lifecycle exposure.",
+              "The candidate’s background in building robust bioinformatics pipelines, utilizing HPC, and version control with Git aligns with requirements for scalable technical solutions.",
+              "Experience in database management, SQL, and organizing metadata showcases foundational skills transferable to backend architecture and data handling within a product context."
+            ],
+            "connector": "While Chunxu's background is strongly rooted in bioinformatics research, their proven ability in software development, data management, and building robust pipelines offers a foundational skillset transferable to a founding engineering role focused on scalable product architecture."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 28,
+              "background_match": 0,
+              "skills_overlap": 8,
+              "experience_relevance": 5,
+              "seniority": 0,
+              "language_requirement": 10,
+              "company_score": 5
+            },
+            "summary": "This mid-senior level Technical Marketing Engineer role at Cisco focuses on driving the adoption of Secure WAN solutions for Datacentre and Campus deployments. It requires collaborating with various teams, translating complex technical concepts into marketing strategies, and creating comprehensive technical documentation and training materials.",
+            "keywords": [
+              "Technical Marketing",
+              "Secure WAN",
+              "Datacentre",
+              "Campus",
+              "Networking Security"
+            ],
+            "fit_bullets": [
+              "The candidate’s experience in data translation and consulting, where they interpreted data for pharmaceutical clients and tailored deliverables, aligns with the role’s need to translate complex technical concepts and communicate value propositions.",
+              "Chunxu possesses strong communication, teamwork, and client engagement soft skills, which are explicitly sought for the cross-functional collaboration and customer interaction inherent in a Technical Marketing Engineer role.",
+              "Experience in developing and maintaining bioinformatics software and pipelines demonstrates a transferable technical aptitude for building and supporting complex solutions, despite the domain difference."
+            ],
+            "connector": "While Chunxu's primary technical background is in bioinformatics and biotech, the transferable experiences in explaining complex analytical findings, collaborating cross-functionally, and developing technical solutions provide a foundational skillset that could be adapted to technical marketing within a new domain like networking security."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 50,
+              "background_match": 1,
+              "skills_overlap": 20,
+              "experience_relevance": 8,
+              "seniority": 9,
+              "language_requirement": 10,
+              "company_score": 2
+            },
+            "summary": "This role is a Senior Manager in Commercial Portfolio Management at The LEGO Group, focusing on shaping a global product portfolio for various markets and channels. The position involves strategic thinking, data-driven decision-making, and fostering cross-functional collaboration to optimize commercial growth and consumer experience.",
+            "keywords": [
+              "Commercial Strategy",
+              "Portfolio Management",
+              "Market Insights",
+              "Data-Driven Decision-Making",
+              "Cross-functional Collaboration"
+            ],
+            "fit_bullets": [
+              "The candidate's experience at Illuminera (IQVIA) in quantitative market research and translating results into actionable insights for pharmaceutical clients aligns with the job's focus on market-driven insights and data-driven decision-making.",
+              "Chunxu's strong analytical and problem-solving skills, honed through bioinformatics projects and an \"AI-driven mindset,\" are transferable to evaluating portfolio performance and modeling scenarios.",
+              "The candidate's \"Collaboration and Influence\" soft skills and experience assisting group members and coordinating with stakeholders align with the need for cross-functional collaboration in the role."
+            ],
+            "connector": "While the candidate's direct industry experience is in bioinformatics and pharma, their demonstrated analytical capabilities, market research experience, and strong soft skills in communication and collaboration could be valuable in contributing to the strategic and data-driven aspects of commercial portfolio management."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 40,
+              "background_match": 1,
+              "skills_overlap": 12,
+              "experience_relevance": 6,
+              "seniority": 8,
+              "language_requirement": 10,
+              "company_score": 3
+            },
+            "summary": "The Business Planner role at L'Oréal involves analyzing sales plans, challenging forecasts, monitoring sales data, and optimizing account planning within the Consumer Products Division. This position requires strong analytical and communication skills to support commercial and finance teams and ensure forecast accuracy.",
+            "keywords": [
+              "Sales analysis",
+              "Forecasting",
+              "Account planning",
+              "Data-driven decision making"
+            ],
+            "fit_bullets": [
+              "Candidate possesses a strong analytical mindset developed through bioinformatics research.",
+              "Experience in quantitative market research and delivering data-driven insights at Illuminera, including Power BI use.",
+              "Demonstrated strong communication, teamwork, and critical thinking skills."
+            ],
+            "connector": "While the candidate's primary experience is in bioinformatics and the pharmaceutical sector, their strong analytical abilities, experience in translating data into insights, and use of tools like Power BI from their consulting internship align with the data-driven nature of this Business Planner role."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 17,
+              "background_match": 0,
+              "skills_overlap": 5,
+              "experience_relevance": 2,
+              "seniority": 0,
+              "language_requirement": 10,
+              "company_score": 0
+            },
+            "summary": "The Accountant role at Alstom is a Mid-Senior level position focused on comprehensive financial management, controlling, and reporting within the transportation manufacturing industry. Responsibilities include budgeting, forecasting, cost control, treasury reporting, and ensuring compliance with financial regulations and company guidelines.",
+            "keywords": [
+              "Finance",
+              "Accounting",
+              "Financial Management",
+              "Reporting",
+              "Budgeting"
+            ],
+            "fit_bullets": [
+              "The candidate possesses strong analytical and problem-solving skills, which are transferable general aptitudes required in an accounting role.",
+              "Experience in organizing and presenting data-driven insights from previous consulting work could align with the need to deliver strategic financial reports."
+            ],
+            "connector": "While the candidate's professional experience is primarily rooted in bioinformatics and scientific data analysis, their demonstrated analytical capabilities and experience in structuring information could be foundational assets in a finance-oriented role like this."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 56,
+              "background_match": 6,
+              "skills_overlap": 18,
+              "experience_relevance": 12,
+              "seniority": 1,
+              "language_requirement": 9,
+              "company_score": 10
+            },
+            "summary": "This role is for a Data Driven Experiences Lead at L'Oréal Dermatological Beauty in the Nordics, tasked with creating personalized digital consumer journeys. It involves defining data acquisition strategies, optimizing brand websites and CRM, and leveraging advanced data analytics and AI/LLM for digital engagement and conversion.",
+            "keywords": [
+              "Digital Experience",
+              "Data Strategy",
+              "Consumer Engagement",
+              "CRM",
+              "AI/LLM"
+            ],
+            "fit_bullets": [
+              "The candidate possesses strong data management, analytical, and programming skills (Python, R, SQL), which are foundational for data-driven roles.",
+              "Experience in quantitative market research and translating data into actionable insights for pharmaceutical clients at IQVIA aligns with the job's focus on consumer insights and strategic reporting.",
+              "Exposure to Machine Learning and Deep Learning through coursework, alongside future thesis work exploring AI/ML approaches, provides a relevant mindset for the role’s LLM understanding requirement."
+            ],
+            "connector": "While Chunxu's core expertise lies in bioinformatics research, her practical experience in data management, pipeline development, and particularly her consulting role at IQVIA in translating data into business insights for pharmaceutical clients, demonstrates a relevant analytical and problem-solving approach that could be applied to data-driven digital experiences."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 20,
+              "background_match": 0,
+              "skills_overlap": 10,
+              "experience_relevance": 0,
+              "seniority": 0,
+              "language_requirement": 10,
+              "company_score": 0
+            },
+            "summary": "This role is for a Business Controller within the Logistics department of an e-commerce company, responsible for turning financial numbers into actionable insights. The position involves leading budgeting, forecasting, and reporting for distribution costs, as well as conducting data analysis to drive efficiency and performance improvements.",
+            "keywords": [
+              "Business Controlling",
+              "Logistics",
+              "Finance",
+              "Data Analysis",
+              "Reporting",
+              "Budgeting"
+            ],
+            "fit_bullets": [
+              "Candidate has experience in developing and maintaining data resources and pipelines, demonstrating strong data handling and analytical capabilities.",
+              "Through a consulting internship, the candidate gained experience in quantitative market research and translating data into actionable insights for pharmaceutical clients.",
+              "Possesses a strong analytical mindset and proficiency in programming languages (Python, R, SQL) and some BI tool experience (Power BI), which are transferable skills for data-driven financial analysis."
+            ],
+            "connector": "While the candidate's background is primarily in bioinformatics, their robust analytical skills and experience in transforming complex data into understandable insights could potentially be adapted to the financial and operational data challenges of a Business Controller role."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 20,
+              "background_match": 0,
+              "skills_overlap": 15,
+              "experience_relevance": 3,
+              "seniority": 2,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "The OSINT Specialist role involves gathering, analyzing, and documenting information from open sources for criminal investigations within the National Unit for Special Crime. The team supports police efforts, develops new OSINT tools, and collaborates nationally and internationally.",
+            "keywords": [
+              "OSINT",
+              "data analysis",
+              "cyber security",
+              "Python",
+              "law enforcement"
+            ],
+            "fit_bullets": [
+              "The candidate possesses programming skills in Python and Bash, explicitly mentioned as tools used by the OSINT team.",
+              "Experience in developing and optimizing bioinformatics pipelines demonstrates a systematic approach to data handling and problem-solving, aligning with the job's need for methodology development.",
+              "Strong soft skills like teamwork, communication, and critical thinking are highlighted as important for collaboration and conveying findings in the job description."
+            ],
+            "connector": "While the candidate's background is primarily in bioinformatics research, their technical proficiency in scripting and data analysis, combined with a systematic approach to problem-solving, could offer a unique perspective adaptable to the investigative challenges of an OSINT specialist role."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 16,
+              "background_match": 0,
+              "skills_overlap": 6,
+              "experience_relevance": 2,
+              "seniority": 0,
+              "language_requirement": 8,
+              "company_score": 0
+            },
+            "summary": "This role seeks a Senior Field Marketing Manager to strategize, implement, and optimize marketing initiatives across the Nordics & Benelux region for a cybersecurity company. The position demands partnering with sales, building customer relationships, and driving pipeline growth through data-driven marketing plans.",
+            "keywords": [
+              "Field Marketing",
+              "Cybersecurity",
+              "Strategic Planning",
+              "B2B Marketing",
+              "Sales Enablement"
+            ],
+            "fit_bullets": [
+              "The candidate has experience in quantitative market research and engaging with clients/KOLs from a consulting internship, showing an ability to gather insights and communicate findings.",
+              "Possesses strong communication, client engagement, and project management skills, which are transferable to a marketing role involving stakeholder interaction and plan execution."
+            ],
+            "connector": "While Chunxu Han's deep expertise lies in bioinformatics and academic research within the life sciences, the professional skills developed in client engagement and data translation during a consulting internship offer a foundational, albeit distant, connection to the strategic communication aspects of a field marketing role."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 62,
+              "background_match": 3,
+              "skills_overlap": 25,
+              "experience_relevance": 20,
+              "seniority": 7,
+              "language_requirement": 2,
+              "company_score": 5
+            },
+            "summary": "This role is for an Analytics Engineer at a Danish media company, focusing on designing, implementing, and maintaining robust data pipelines and models. The position aims to transform raw data into valuable business insights across digital platforms and requires expertise in cloud-based data platforms, ETL/ELT processes, and stakeholder collaboration to support the company's digital growth strategy.",
+            "keywords": [
+              "Data Pipelines",
+              "Data Modeling",
+              "ETL/ELT",
+              "Cloud Platforms",
+              "SQL"
+            ],
+            "fit_bullets": [
+              "Developed and optimized scalable data pipelines and transformation processes for large-scale proteomics data, leveraging HPC and Git for version control.",
+              "Proficient in SQL and Python/R, with experience in data modeling, quality control, and translating complex data into actionable insights, including Power BI deliverables.",
+              "Demonstrates strong analytical skills, problem-solving, and cross-functional collaboration, crucial for stakeholder engagement in data initiatives."
+            ],
+            "connector": "Chunxu Han's robust experience in bioinformatics data engineering and scientific software development equips them with highly transferable skills to drive data transformation and build robust data solutions within the digital media landscape."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 12,
+              "background_match": 0,
+              "skills_overlap": 5,
+              "experience_relevance": 2,
+              "seniority": 1,
+              "language_requirement": 4,
+              "company_score": 0
+            },
+            "summary": "This role is for a Customer Director at Alstom in Copenhagen, focusing on being the main point of contact for customers, driving business growth and satisfaction, managing project profitability, and contributing to both tender and project execution phases within the rail industry.",
+            "keywords": [
+              "Customer Relationship Management",
+              "Business Development",
+              "Project Profitability",
+              "Sales",
+              "Negotiation"
+            ],
+            "fit_bullets": [
+              "Has experience in \"Client and KOLs Engagement\" and building professional relationships with clients at Illuminera (IQVIA).",
+              "Demonstrated ability in \"Data Translation & Consulting\" to translate insights and tailor deliverables for pharmaceutical clients.",
+              "Possesses strong communication and teamwork skills, and a collaborative mindset from various academic and research roles.",
+              "Is proficient in English and has basic knowledge of Danish, which is a stated language requirement."
+            ],
+            "connector": "While the candidate's background is primarily in bioinformatics and the pharmaceutical industry, their demonstrated ability in client engagement and translating complex information for stakeholders provides a foundational understanding of customer relationship management, which is a central aspect of this Customer Director role."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 52,
+              "background_match": 5,
+              "skills_overlap": 20,
+              "experience_relevance": 8,
+              "seniority": 1,
+              "language_requirement": 9,
+              "company_score": 9
+            },
+            "summary": "This role is for a Principal Translational Scientist to lead preclinical research in neuroscience and inflammation. The position involves designing and overseeing in vivo studies, developing animal models, and shaping strategic direction for therapeutic pipeline advancement while collaborating across scientific teams and mentoring junior staff.",
+            "keywords": [
+              "In vivo pharmacology",
+              "neuroscience",
+              "inflammation",
+              "translational biology",
+              "preclinical research"
+            ],
+            "fit_bullets": [
+              "The candidate has strong bioinformatics skills, including multi-omics analysis (transcriptomics, proteomics, metagenomics, single-cell RNA-seq), which is an advantage for the role.",
+              "Experience in developing computational frameworks and optimizing bioinformatics pipelines, including AI/ML approaches, demonstrates a strong analytical and technical foundation.",
+              "Has prior experience in the pharmaceutical/biotech industry through internships (Illuminera, Novo Nordisk) and expresses eagerness to expand in this sector."
+            ],
+            "connector": "While the candidate's core expertise lies in bioinformatics and computational analysis rather than direct in vivo pharmacology, their strong analytical skills and industry exposure could support data interpretation and mechanistic insights within the preclinical research framework."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 62,
+              "background_match": 3,
+              "skills_overlap": 25,
+              "experience_relevance": 18,
+              "seniority": 2,
+              "language_requirement": 9,
+              "company_score": 5
+            },
+            "summary": "This Data Science Manager role at Annalect involves leading a team within a fast-growing organization, managing customer projects from inception to delivery, contributing to product innovation using AI and Data Science, and translating complex data results into actionable insights for marketing clients.",
+            "keywords": [
+              "Data Science",
+              "AI/ML",
+              "Client Management",
+              "Leadership",
+              "Marketing Analytics"
+            ],
+            "fit_bullets": [
+              "The candidate possesses strong programming skills (Python, R, SQL) and experience in Machine Learning and Deep Learning, directly relevant to the technical requirements of the role.",
+              "Chunxu Han has experience in quantitative market research and translating analytical findings into clear, actionable insights for pharmaceutical clients, aligning with the job's focus on customer insights.",
+              "The candidate's master's thesis involves developing computational frameworks and exploring AI/ML approaches, demonstrating a proactive approach to advanced analytical methodology.",
+              "Experience with software development and maintenance, including handling GitHub issues, indicates a strong capability in supporting product innovation and solutions."
+            ],
+            "connector": "While the candidate's primary domain experience is in Bioinformatics and Pharma/Biotech, their robust data science skills, client engagement experience, and passion for leveraging AI for problem-solving align with Annalect's mission to create change for customers through data-driven insights."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 83,
+              "background_match": 2,
+              "skills_overlap": 28,
+              "experience_relevance": 30,
+              "seniority": 9,
+              "language_requirement": 10,
+              "company_score": 4
+            },
+            "summary": "This entry-level Revenue Operations Analyst role at All Gravy focuses on optimizing the company's revenue generation processes by managing the CRM, automating workflows, and providing data-driven insights. The position is critical for scaling operations during rapid expansion, particularly into the UK market.",
+            "keywords": [
+              "CRM",
+              "Automation",
+              "SQL",
+              "Data Analytics",
+              "Revenue Operations",
+              "APIs"
+            ],
+            "fit_bullets": [
+              "Proficiency in SQL and Python, along with experience in developing and optimizing bioinformatics pipelines, aligns with the need for data querying, automation, and system architecting.",
+              "Demonstrated ability to develop, maintain, and update complex software tools (IsoformSwitchAnalyzeR) shows a strong aptitude for owning and scaling technology stacks.",
+              "Experience in quantitative market research and translating complex data into actionable business insights using Power BI directly supports the creation of analytics and reports for leadership."
+            ],
+            "connector": "While the candidate's primary domain has been bioinformatics, their robust technical background in data management, software development, and analytical reporting offers highly transferable skills that could significantly contribute to optimizing revenue operations at All Gravy."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 44,
+              "background_match": 1,
+              "skills_overlap": 12,
+              "experience_relevance": 8,
+              "seniority": 10,
+              "language_requirement": 10,
+              "company_score": 3
+            },
+            "summary": "This entry-level Business Operations Analyst role at UNDP involves providing support for Smart Facility service offerings, focusing on procurement, finance, and stakeholder management. It requires contributing to strategy development, risk analysis, financial planning, and continuous process improvement within the Service Delivery unit.",
+            "keywords": [
+              "Business Operations",
+              "Procurement",
+              "Finance",
+              "Stakeholder Management",
+              "Process Improvement"
+            ],
+            "fit_bullets": [
+              "Candidate possesses strong data management and organizational skills, relevant for handling operational data.",
+              "Experience in quantitative market research and client engagement from a consulting internship demonstrates transferable analytical and communication abilities.",
+              "Proven project management and collaborative work experience aligns with the organizational and teamwork aspects of the role.",
+              "Candidate has experience in data-driven deliverables using tools like PowerPoint and Power BI, which can be applied to reporting tasks."
+            ],
+            "connector": "While the candidate's core expertise is in bioinformatics, their demonstrated skills in data handling, project coordination, and client communication provide a foundational skill set that could be adapted to the operational and analytical challenges presented by this Business Operations Analyst position."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 75,
+              "background_match": 7,
+              "skills_overlap": 20,
+              "experience_relevance": 22,
+              "seniority": 9,
+              "language_requirement": 10,
+              "company_score": 7
+            },
+            "summary": "This Machine Learning Engineer role at Trustpilot focuses on building and maintaining scalable systems for AI models. The position involves deploying, monitoring, and optimizing machine learning models in production environments, as well as developing CI/CD pipelines in a collaborative setting.",
+            "keywords": [
+              "Machine Learning",
+              "MLOps",
+              "Model Deployment",
+              "CI/CD",
+              "Production Systems"
+            ],
+            "fit_bullets": [
+              "Developed and optimized bioinformatics pipelines, leveraging HPC and Git for version control, which directly relates to building and maintaining data and model pipelines.",
+              "The candidate's Master's thesis focuses on developing computational frameworks and exploring AI/ML approaches for data evaluation, aligning with machine learning model development and analysis.",
+              "Has experience in software development and maintenance, including contributing to an R package and solving issues on Github, demonstrating practical coding and tool development skills."
+            ],
+            "connector": "Chunxu's strong foundation in computational biology, coupled with practical experience in pipeline development and AI/ML approaches during their academic tenure, provides a solid base to transition into and contribute to Trustpilot's machine learning engineering initiatives."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 82,
+              "background_match": 9,
+              "skills_overlap": 23,
+              "experience_relevance": 24,
+              "seniority": 8,
+              "language_requirement": 10,
+              "company_score": 8
+            },
+            "summary": "This role is for a Metabolomics Data Scientist at cmbio, focusing on processing and analyzing mass spectrometry data in the context of analytical chemistry and microbiome science. The position involves developing and maintaining data processing workflows, managing client projects, and collaborating with cross-functional teams.",
+            "keywords": [
+              "Metabolomics",
+              "Mass Spectrometry",
+              "Bioinformatics",
+              "Data Pipelines",
+              "SQL"
+            ],
+            "fit_bullets": [
+              "The candidate has strong programming skills (Python, R, SQL) and experience developing and maintaining bioinformatics pipelines, directly relevant to processing and troubleshooting data workflows.",
+              "Experience in proteomics data management and analysis, including handling large datasets and building HPC pipelines, demonstrates capability in processing complex '-omics' data, even if not directly metabolomics MS data.",
+              "Proficiency in English and soft skills like communication and teamwork, honed through academic and consulting roles, align with the need for client engagement and cross-functional collaboration."
+            ],
+            "connector": "Chunxu's robust background in bioinformatics, data pipeline development, and data management for various omics technologies provides a strong foundation for transitioning into a metabolomics-focused data scientist role and contributing to cmbio's analytical chemistry and microbiome science initiatives."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 73,
+              "background_match": 1,
+              "skills_overlap": 21,
+              "experience_relevance": 24,
+              "seniority": 10,
+              "language_requirement": 10,
+              "company_score": 7
+            },
+            "summary": "This internship at the World Climate Foundation focuses on supporting the CLIMATEFIT project, which develops innovative financial solutions for climate change adaptation in Europe. The intern will primarily assist with research, project coordination, stakeholder engagement, and documentation for this EU-wide initiative.",
+            "keywords": [
+              "Climate Finance",
+              "Climate Adaptation",
+              "Project Coordination",
+              "Innovation",
+              "Stakeholder Engagement"
+            ],
+            "fit_bullets": [
+              "Demonstrated strong organizational skills and ability to manage multiple tasks, acquired from various research and internship roles.",
+              "Extensive experience in stakeholder engagement and collaboration, including working with clients, KOLs, and cross-functional teams in previous roles.",
+              "Proven ability in qualitative and quantitative research, data analysis, documentation, and preparing presentations for diverse audiences."
+            ],
+            "connector": "While the candidate's core domain is bioinformatics and biotech, their well-developed transferable skills in project coordination, research, and stakeholder management are highly relevant and can be effectively applied to contribute to the World Climate Foundation's mission in climate finance and innovation."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 64,
+              "background_match": 4,
+              "skills_overlap": 25,
+              "experience_relevance": 22,
+              "seniority": 1,
+              "language_requirement": 8,
+              "company_score": 4
+            },
+            "summary": "The Analytics Director role at Annalect is a senior leadership position focused on leveraging AI and Data Science to provide actionable insights for clients' marketing effectiveness and ROI. This role involves developing strategy, managing a customer portfolio, and leading a team of data science specialists.",
+            "keywords": [
+              "AI",
+              "Data Science",
+              "Marketing Analytics",
+              "Leadership",
+              "Customer Management"
+            ],
+            "fit_bullets": [
+              "Developed and optimized bioinformatics pipelines and contributed to tool development, demonstrating strong coding and analytical skills applicable to data solutions.",
+              "Gained experience in quantitative market research, client engagement, and translating complex data into actionable insights for pharmaceutical clients, aligning with the job's focus on customer results.",
+              "Has taken Machine Learning and Deep Learning courses and applied AI/ML approaches in projects, matching the company's core focus on AI-driven solutions."
+            ],
+            "connector": "While much of the candidate's experience is within the bioinformatics and pharmaceutical sectors, their strong foundation in AI/ML, data translation, and client engagement aligns with Annalect's mission to drive change for customers through data science."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 59,
+              "background_match": 7,
+              "skills_overlap": 20,
+              "experience_relevance": 22,
+              "seniority": 5,
+              "language_requirement": 0,
+              "company_score": 5
+            },
+            "summary": "This Data Engineer role at cVation involves building cloud-based data platforms, data warehouses, and MLOps solutions for clients using Azure technologies. The position emphasizes agile development, Infrastructure as Code, and close collaboration within project teams to deliver high-quality software and data solutions.",
+            "keywords": [
+              "Data Engineer",
+              "Azure",
+              "MLOps",
+              "Data Platforms",
+              "Cloud Consulting"
+            ],
+            "fit_bullets": [
+              "Developed and maintained data resources and bioinformatics pipelines, including working with SQL and HPC, demonstrating experience relevant to data platform construction.",
+              "Experience in software development and maintenance (IsoformSwitchAnalyzeR) and proficiency in Python and Git align with the technical requirements for building robust data solutions.",
+              "Engaged in quantitative market research and client engagement as a consulting intern, which is relevant to the client-facing aspect of the role."
+            ],
+            "connector": "With a strong foundation in data management, pipeline development, and a desire to apply computational skills to real-world problems, Chunxu is well-suited to contribute to building innovative cloud data solutions."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 70,
+              "background_match": 3,
+              "skills_overlap": 20,
+              "experience_relevance": 24,
+              "seniority": 10,
+              "language_requirement": 9,
+              "company_score": 4
+            },
+            "summary": "This role is for a Strategy Analyst within emagine's Strategy & Transformation team, focusing on supporting leadership decisions and strategic initiatives. The analyst will drive analytical excellence, provide data-driven insights, and facilitate the execution of key company strategies.",
+            "keywords": [
+              "Strategy",
+              "Data Analysis",
+              "Business Consulting",
+              "Stakeholder Management",
+              "Executive Reporting"
+            ],
+            "fit_bullets": [
+              "The candidate's \"Consulting Intern\" experience involved quantitative market research and translating results into actionable insights for pharmaceutical clients, aligning with the job's analytical responsibilities.",
+              "Experience in creating data-driven deliverables using PowerPoint and Power BI directly matches the job's requirement for preparing presentations and dashboards for senior stakeholders.",
+              "The candidate demonstrates strong analytical skills, a problem-solving mindset, and clear communication abilities, which are critical requirements for this strategy analyst role."
+            ],
+            "connector": "While the candidate's primary academic background is in bioinformatics, their practical experience in market research, client engagement, and data-driven reporting within a consulting context provides highly transferable skills applicable to this strategy analyst position."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 53,
+              "background_match": 8,
+              "skills_overlap": 10,
+              "experience_relevance": 5,
+              "seniority": 10,
+              "language_requirement": 10,
+              "company_score": 10
+            },
+            "summary": "This role is for a Director of Global Strategic Accounts at Merck Life Science, focusing on developing and executing global strategies for Process Solutions, managing key customer relationships, and driving revenue. It requires extensive experience in strategic account management within the life science or pharmaceutical industry.",
+            "keywords": [
+              "Global Strategic Accounts",
+              "Life Science",
+              "Pharma",
+              "Business Development",
+              "Customer Relationship Management"
+            ],
+            "fit_bullets": [
+              "Candidate has consulting intern experience at Illuminera (IQVIA) involving quantitative market research and client engagement within the pharmaceutical sector.",
+              "Possesses soft skills like \"Client Engagement\" and \"Communication\" which are relevant for a client-facing role.",
+              "Has industry exposure to pharmaceutical and biotech companies through internships at IQVIA, SINOVAC, and a Master's project at Novo Nordisk."
+            ],
+            "connector": "While Chunxu's primary background is in bioinformatics research and data analysis, their limited experience as a Consulting Intern at IQVIA provides some tangential understanding of the pharmaceutical market and client interaction relevant to this industry."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 30,
+              "background_match": 0,
+              "skills_overlap": 15,
+              "experience_relevance": 5,
+              "seniority": 10,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "This graduate position in Financial Reporting at Nykredit focuses on ensuring accurate and consolidated accounting data for internal and external reporting. The role involves working with accounting, regulatory submissions, controlling, PnL calculations, and implementing new accounting standards within the banking and financial services sector.",
+            "keywords": [
+              "Financial Reporting",
+              "Accounting",
+              "Regulatory Reporting",
+              "Data Analysis",
+              "SQL"
+            ],
+            "fit_bullets": [
+              "The candidate has strong data management and SQL skills, directly aligning with the job's interest in financial systems and coding like SQL.",
+              "Chunxu demonstrates good collaboration and teamwork skills through various projects, which are essential for contributing to cross-functional initiatives at Nykredit.",
+              "The candidate's experience in developing computational frameworks and utilizing AI/ML approaches shows a capacity for understanding and working with complex systems, a transferable skill for financial reporting technologies."
+            ],
+            "connector": "While Chunxu's domain expertise is in bioinformatics, the transferable data management, analytical, and collaborative skills developed throughout her academic and professional experiences could enable contributions to the data-intensive environment of financial reporting."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 2,
+              "background_match": 0,
+              "skills_overlap": 2,
+              "experience_relevance": 0,
+              "seniority": 0,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "This role is for an HR Legal Consultant within Rødovre Municipality, focusing on advising managers on personnel legal matters and facilitating dialogue within the municipal co-determination (MED) system. The consultant will also provide secretarial support to the Main Committee and collaborate with trade unions.",
+            "keywords": [
+              "HR Legal",
+              "MED-system",
+              "Public Labor Law",
+              "Municipal Administration"
+            ],
+            "fit_bullets": [
+              "The candidate possesses general soft skills like communication and teamwork, which are beneficial in any professional setting.",
+              "The candidate has basic Danish language skills, demonstrating an effort to learn the local language."
+            ],
+            "connector": "Despite the candidate's strong analytical background in bioinformatics, this role requires specialized expertise in Danish HR legal frameworks and municipal administration, which are not present in their profile."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 15,
+              "background_match": 0,
+              "skills_overlap": 5,
+              "experience_relevance": 0,
+              "seniority": 0,
+              "language_requirement": 10,
+              "company_score": 0
+            },
+            "summary": "This executive role is for a Head of Technical Sales at Cadeler, focusing on leading the technical strategy for offshore wind turbine and foundation tenders. The position requires a blend of technical expertise and commercial acumen to secure projects and drive growth in the offshore wind industry.",
+            "keywords": [
+              "Offshore Wind",
+              "Technical Sales",
+              "Tender Management",
+              "Team Leadership",
+              "Commercial Strategy"
+            ],
+            "fit_bullets": [
+              "The candidate demonstrates strong communication, teamwork, and client engagement skills, which are valuable for leadership and stakeholder management in a commercial role.",
+              "The candidate has experience in project management and improving technical tools, showcasing an ability to oversee and optimize complex initiatives."
+            ],
+            "connector": "While the candidate's core domain expertise is in bioinformatics, their general capabilities in project execution and effective communication are transferrable, albeit at a significantly different level of experience and industry focus."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 11,
+              "background_match": 0,
+              "skills_overlap": 5,
+              "experience_relevance": 2,
+              "seniority": 0,
+              "language_requirement": 4,
+              "company_score": 0
+            },
+            "summary": "This is a mid-senior level Sales Manager role at PVH Corp. for their Underwear division in the Nordics region. The position involves leading a sales team, developing and executing sales strategies, managing customer relationships, and achieving revenue and profitability targets within the retail apparel and fashion industry.",
+            "keywords": [
+              "Sales Management",
+              "Retail Apparel",
+              "Fashion",
+              "Nordics Market",
+              "Business Development"
+            ],
+            "fit_bullets": [
+              "Candidate gained experience in \"Data Translation & Consulting\" and \"Client and KOLs Engagement\" where they learned to translate insights for clients and build professional relationships, transferable to stakeholder management in sales.",
+              "Demonstrated strong teamwork and communication skills through various group projects and collaborations, essential for leading and developing sales teams.",
+              "Managed various ad-hoc tasks and learned to prioritize work effectively in a fast-paced research environment, showcasing adaptability and problem-solving relevant to a dynamic sales role."
+            ],
+            "connector": "While the candidate's core background is in bioinformatics research, their experience in client-facing consulting, stakeholder engagement, and team collaboration demonstrates a foundation in communication and relationship-building crucial for a sales management position."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 5,
+              "background_match": 0,
+              "skills_overlap": 5,
+              "experience_relevance": 0,
+              "seniority": 0,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "This role is for a Special Consultant within the National Center for IT Crime (NCIK) of the Danish National Police. The position focuses on preliminary investigations into digital sexual crimes and serving as a Single Point of Contact (SPOC) to facilitate international cooperation and data acquisition from internet platforms.",
+            "keywords": [
+              "IT Crime Investigation",
+              "Electronic Evidence",
+              "International Cooperation",
+              "Digital Forensics",
+              "Preliminary Investigation"
+            ],
+            "fit_bullets": [
+              "The candidate's strong programming (Python, R, SQL) and data management skills are transferable to handling digital information and evidence, despite the domain difference.",
+              "Experience in consulting and client engagement suggests an ability to communicate complex information and tailor deliverables, which could be useful for liaising with international partners or presenting findings."
+            ],
+            "connector": "While the candidate's primary experience is in bioinformatics and pharmaceutical consulting, their strong analytical, data management, and technical development skills could be adapted to the data-intensive aspects of IT crime investigation and international evidence gathering, given a steep learning curve in the legal and police domain."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 12,
+              "background_match": 0,
+              "skills_overlap": 10,
+              "experience_relevance": 0,
+              "seniority": 2,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "This Mid-Senior level contract position for a Fire Protection Engineer involves providing expert fire safety consultancy for diverse construction projects in Denmark. Key responsibilities include preparing fire strategies, leading technical projects, managing medium to large-scale projects, and acting as a primary client contact.",
+            "keywords": [
+              "Fire protection",
+              "Fire engineering",
+              "Fire safety",
+              "Consultancy",
+              "Project management"
+            ],
+            "fit_bullets": [
+              "The candidate possesses consulting experience from Illuminera/IQVIA, demonstrating an ability to translate complex information and engage with clients.",
+              "Chunxu Han has experience managing projects from their BSc thesis and Master's student role at Novo Nordisk, showcasing general project execution skills.",
+              "The candidate has basic Danish language skills, which aligns with the job's requirement for local language proficiency."
+            ],
+            "connector": "Although Chunxu Han's technical expertise lies in bioinformatics and the biotech sector, their experience in client consulting, project coordination, and a foundational understanding of Danish language are transferable professional assets that could contribute to client-facing consultancy work."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 6,
+              "background_match": 0,
+              "skills_overlap": 5,
+              "experience_relevance": 0,
+              "seniority": 0,
+              "language_requirement": 0,
+              "company_score": 1
+            },
+            "summary": "This role is for a Lead Structural Design Engineer at Fluor Corporation in Copenhagen, focusing on complex structural engineering tasks for various industrial projects including advanced manufacturing, pharmaceuticals, and data centers. The position requires extensive experience in structural analysis, design, and project leadership, alongside adherence to Danish building regulations.",
+            "keywords": [
+              "Structural Engineering",
+              "Project Leadership",
+              "Design",
+              "Construction",
+              "Danish Building Regulations"
+            ],
+            "fit_bullets": [
+              "The candidate's experience in the pharmaceutical and biotech industry aligns with the job's mention of pharmaceutical and biotechnology projects within the construction context.",
+              "Chunxu demonstrates strong soft skills such as communication, teamwork, and critical thinking, which are valuable in any lead engineering role."
+            ],
+            "connector": "While Chunxu's core expertise lies in bioinformatics and data science within the biotech/pharma sector, the job description mentions projects in pharmaceuticals and biotechnology, offering a tangential connection to the company's broader scope, even if the specific role is vastly different and requires a different technical skillset."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 36,
+              "background_match": 0,
+              "skills_overlap": 18,
+              "experience_relevance": 8,
+              "seniority": 10,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "This graduate position in Performance Management at Nykredit involves analyzing and reporting the financial performance of the company to various stakeholders. The role focuses on developing financial understanding, analytical abilities, and communication skills to provide actionable insights within the banking sector. It emphasizes collaboration and taking responsibility from day one.",
+            "keywords": [
+              "financial analysis",
+              "performance reporting",
+              "data insights",
+              "stakeholder communication",
+              "banking"
+            ],
+            "fit_bullets": [
+              "The candidate's experience in quantitative market research and creating data-driven deliverables for pharmaceutical clients demonstrates transferable analytical and presentation skills.",
+              "Proficiency in presentation tools like Power BI and PowerPoint directly matches the job's requirement for presenting complex data simply and relevantly.",
+              "The candidate exhibits strong soft skills including teamwork, communication, problem-solving, and a proactive mindset, which align with the collaborative and responsibility-driven aspects of the graduate role."
+            ],
+            "connector": "While the candidate's core industry experience is in bioinformatics and the pharmaceutical sector, their robust analytical capabilities, experience in generating data-driven insights, and professional communication skills are valuable transferable assets for a performance analysis role."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 5,
+              "background_match": 0,
+              "skills_overlap": 0,
+              "experience_relevance": 0,
+              "seniority": 0,
+              "language_requirement": 5,
+              "company_score": 0
+            },
+            "summary": "This role is for a Lead Electrical Design Engineer at Fluor Corporation in Copenhagen, responsible for leading electrical design activities, ensuring compliance with EU and Danish electrical codes, and guiding multidisciplinary teams on mid-to-large scale projects. The position involves defining scope, conducting quality audits, preparing specifications, performing calculations, and managing project phases from design to close-out.",
+            "keywords": [
+              "Electrical Engineering",
+              "EU Electrical Codes",
+              "Project Leadership",
+              "Power Systems",
+              "Design"
+            ],
+            "fit_bullets": [],
+            "connector": "Chunxu Han's background in Bioinformatics and research is in a completely different domain than the required Electrical Design Engineering role."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 13,
+              "background_match": 0,
+              "skills_overlap": 5,
+              "experience_relevance": 0,
+              "seniority": 8,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "This role within PET's Security Department involves contributing to the development and maintenance of technical tools and solutions for tactical operative tasks. It requires a technically oriented individual to support law enforcement operations through innovation and collaboration.",
+            "keywords": [
+              "Technical operative support",
+              "Law enforcement technology",
+              "Tactical solutions",
+              "Security",
+              "Denmark"
+            ],
+            "fit_bullets": [
+              "Developed and maintained software (IsoformSwitchAnalyzeR) and bioinformatics pipelines, demonstrating a capacity for technical development and maintenance.",
+              "Experience with complex data management and problem-solving, which are transferable skills to technically demanding operative environments.",
+              "Proven ability to work in teams and collaborate, aligning with the job's emphasis on cross-functional coordination."
+            ],
+            "connector": "While the candidate's background is in bioinformatics, their experience in software development, pipeline creation, and collaborative problem-solving indicates an aptitude for complex technical tasks that could be adapted to the operative challenges of this role, assuming the necessary domain-specific knowledge can be acquired."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 25,
+              "background_match": 1,
+              "skills_overlap": 7,
+              "experience_relevance": 3,
+              "seniority": 4,
+              "language_requirement": 2,
+              "company_score": 8
+            },
+            "summary": "The Inside Account Executive role at Cisco involves managing and expanding sales opportunities for Cisco's networking portfolio within the Mid-Market Private sector. This collaborative position requires working with partners and internal teams to achieve sales targets and drive customer engagement in B2B sales.",
+            "keywords": [
+              "Sales",
+              "Account Management",
+              "Networking",
+              "B2B",
+              "IT"
+            ],
+            "fit_bullets": [
+              "Candidate lists \"Communication, Teamwork, Client Engagement, Problem Solving\" as soft skills, which are crucial for a collaborative sales role.",
+              "Experience in \"Data Translation & Consulting\" involved understanding client needs and tailoring deliverables, showing transferable client-facing abilities.",
+              "The candidate expresses an eagerness to expand into industry, aligning with the opportunity to join a large international tech company."
+            ],
+            "connector": "While the candidate's primary technical background is in bioinformatics, their experience in client engagement and translating complex information into actionable insights, combined with strong soft skills, provides a foundation for a client-facing role in a technology-driven environment like Cisco."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 32,
+              "background_match": 0,
+              "skills_overlap": 10,
+              "experience_relevance": 2,
+              "seniority": 10,
+              "language_requirement": 10,
+              "company_score": 0
+            },
+            "summary": "The Junior Buyer role at Boozt is an entry-level position within the Kids department, focusing on supporting the buying and merchandising team. Key responsibilities include order management, assortment planning, and building supplier relationships in a fast-paced retail e-commerce environment.",
+            "keywords": [
+              "Buying",
+              "Retail",
+              "E-commerce",
+              "Order Management",
+              "Supplier Relations"
+            ],
+            "fit_bullets": [
+              "The candidate's strong organizational and multitasking skills are transferable from managing diverse research projects and data pipelines.",
+              "Experience in client engagement and effective communication, gained during a consulting internship, could be adapted to building supplier relationships.",
+              "The candidate demonstrates adaptability and a strong work ethic, evidenced by quickly learning new tools and tackling ad-hoc tasks in previous roles."
+            ],
+            "connector": "While the candidate's direct industry experience is in bioinformatics and pharma, their demonstrated abilities in organization, communication, and project coordination could provide a foundation for contributing to the operational aspects of this junior buying position."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 13,
+              "background_match": 0,
+              "skills_overlap": 3,
+              "experience_relevance": 0,
+              "seniority": 10,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "This role is for a salesperson at JYSK Gentofte, focusing on providing excellent customer service, driving sales, and contributing to store operations. It requires a proactive attitude, teamwork, and flexibility, including weekend work.",
+            "keywords": [
+              "Retail Sales",
+              "Customer Service",
+              "Store Operations",
+              "Teamwork",
+              "Flexibility"
+            ],
+            "fit_bullets": [
+              "The candidate possesses a strong academic and research background in bioinformatics, data analysis, and pharmaceutical consulting, which is highly specialized and not directly aligned with retail sales responsibilities.",
+              "While the candidate demonstrates transferable soft skills such as communication, teamwork, and client engagement, their core technical skills and industry experience are not relevant to this sales position."
+            ],
+            "connector": "Chunxu Han's stated career ambition is to expand into the Pharmaceutical or Biotech industry, which is a significant divergence from the retail sales environment offered by JYSK."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 51,
+              "background_match": 2,
+              "skills_overlap": 15,
+              "experience_relevance": 10,
+              "seniority": 10,
+              "language_requirement": 10,
+              "company_score": 4
+            },
+            "summary": "This is an entry-level Sales Development Representative (SDR) role at Brandwatch, a social and marketing technology company. The primary responsibility is to generate new business opportunities by engaging potential customers, scheduling meetings, and contributing to the sales pipeline.",
+            "keywords": [
+              "Sales",
+              "Lead Generation",
+              "SaaS",
+              "Customer Engagement",
+              "Business Development"
+            ],
+            "fit_bullets": [
+              "Candidate possesses strong communication, teamwork, and client engagement soft skills, which are directly relevant to initiating contact and building relationships.",
+              "Experience as a Consulting Intern at IQVIA involved market research, client interaction, and translating insights, demonstrating an ability to understand market needs and communicate value.",
+              "Proficiency in English aligns with the job requirement for excellent written and spoken communication skills."
+            ],
+            "connector": "While the candidate's primary background is in bioinformatics and research, their experience in data translation and consulting, coupled with strong interpersonal skills, provides a foundational aptitude for understanding client needs and communicating effectively in a sales development capacity."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 2,
+              "background_match": 0,
+              "skills_overlap": 2,
+              "experience_relevance": 0,
+              "seniority": 0,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "The role is for a psychologist or occupational psychologist to support employee well-being within the HR development section of the Danish Police Intelligence Service (PET). Responsibilities include conducting group and individual supervision, particularly for staff in demanding operational environments, and contributing to organizational development and training.",
+            "keywords": [
+              "Psykolog",
+              "Supervision",
+              "Medarbejdertrivsel",
+              "HR-udvikling",
+              "Operativ kontekst"
+            ],
+            "fit_bullets": [
+              "Candidate demonstrates strong teamwork and communication skills, essential for collaboration and stakeholder engagement mentioned in the job.",
+              "Experience in organizing work effectively and adapting to fast-paced environments could be transferable to managing diverse tasks and unpredictability."
+            ],
+            "connector": "While the candidate's technical background is in bioinformatics, their developed soft skills in communication and teamwork are universally valuable in roles focused on human support and organizational collaboration."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 4,
+              "background_match": 0,
+              "skills_overlap": 2,
+              "experience_relevance": 0,
+              "seniority": 0,
+              "language_requirement": 2,
+              "company_score": 0
+            },
+            "summary": "The Head of IT Operations at NTG is a mid-senior leadership role responsible for ensuring a stable, modern, and scalable IT infrastructure across 82 global entities. This involves driving strategic direction for hybrid infrastructure, modern workplace solutions, network connectivity, and managing budgets, ITSM processes, and an international team.",
+            "keywords": [
+              "IT Operations",
+              "Cloud Platforms",
+              "Network Management",
+              "ITSM",
+              "Team Leadership"
+            ],
+            "fit_bullets": [
+              "Possesses skills in database and data management, including collecting, curating, and building pipelines for data resources.",
+              "Has experience in software development and maintenance, specifically contributing to an R package and solving GitHub issues.",
+              "Demonstrates strong teamwork, problem-solving, and communication skills from academic and intern experiences."
+            ],
+            "connector": "While the candidate's technical expertise lies in bioinformatics and research-oriented data analysis, their experience with data resource management and software maintenance, along with strong soft skills, provides a transferable foundation for engaging with technical challenges, albeit in a different industry and scope."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 22,
+              "background_match": 1,
+              "skills_overlap": 8,
+              "experience_relevance": 5,
+              "seniority": 4,
+              "language_requirement": 0,
+              "company_score": 4
+            },
+            "summary": "This role is for a Digital Dialogue Marketing Specialist focusing on creating and optimizing 1:1 customer communication across digital channels like mobile banking and email. The specialist will be responsible for translating business goals into communication strategies, developing campaign content, and analyzing performance to drive online business growth and customer engagement. The position requires strong analytical skills and experience with digital marketing tools in a data-driven environment.",
+            "keywords": [
+              "Digital Marketing",
+              "Customer Engagement",
+              "Data Analysis",
+              "1:1 Communication",
+              "Financial Services"
+            ],
+            "fit_bullets": [
+              "The candidate has experience in quantitative market research and translating analytical findings into actionable insights for pharmaceutical clients, demonstrating an ability to interpret data for business objectives.",
+              "The candidate has experience using Power BI for data-driven deliverables, which is mentioned as a preferred analysis platform in the job description.",
+              "The candidate's soft skills like Communication, Client Engagement, and Critical Thinking align with the need for effective communication and stakeholder interaction in the role."
+            ],
+            "connector": "While the candidate's core background is in bioinformatics, their experience in data translation, client engagement, and using tools like Power BI could offer transferable analytical and communication capabilities for a data-driven marketing role."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 13,
+              "background_match": 0,
+              "skills_overlap": 5,
+              "experience_relevance": 0,
+              "seniority": 0,
+              "language_requirement": 8,
+              "company_score": 0
+            },
+            "summary": "This executive leadership role involves owning the global website strategy for Saxo Bank, focusing on improving visitor-to-lead conversion rates and driving commercial outcomes through content. It requires leading a large multidisciplinary team and optimizing web platforms using data-driven insights and CRO strategies.",
+            "keywords": [
+              "Websites",
+              "Digital Marketing",
+              "CRO",
+              "Leadership",
+              "Financial Services"
+            ],
+            "fit_bullets": [
+              "The candidate has experience in quantitative market research and translating data into actionable insights for pharmaceutical clients, which could be transferable to understanding market and client needs for web optimization.",
+              "They possess strong analytical abilities with programming skills (Python, R, SQL) and experience with data-driven deliverables, aligning with the job's need for analytical insights.",
+              "The candidate has demonstrated communication and client engagement skills from their consulting intern role, which are relevant to stakeholder management in an executive position."
+            ],
+            "connector": "While the candidate's core expertise lies in bioinformatics and data science within the biotech/pharma sector, their experience in data analysis, client engagement, and translating data into actionable insights offers transferable skills relevant to driving commercial outcomes through data-driven strategies for web platforms."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 16,
+              "background_match": 0,
+              "skills_overlap": 7,
+              "experience_relevance": 1,
+              "seniority": 8,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "This role is for a Digital CRM & Marketing Manager at DGI Byen, focusing on driving subscriber growth, retention, and loyalty for their health and leisure activities. The position involves developing CRM and marketing automation strategies, optimizing customer journeys, and executing digital campaigns with a data-driven approach.",
+            "keywords": [
+              "CRM",
+              "Digital Marketing",
+              "Marketing Automation",
+              "Lead Generation",
+              "Customer Loyalty"
+            ],
+            "fit_bullets": [
+              "Experience with data management (SQL) and analytical approaches, which can be broadly applied to data-driven marketing efforts.",
+              "Demonstrated ability to engage with stakeholders and translate complex findings into actionable insights, gained from a consulting internship in a different industry.",
+              "Proven project management and collaboration skills developed through academic research and tool development."
+            ],
+            "connector": "While the candidate's core background is in bioinformatics research, the transferable analytical skills, experience with data-driven insights, and a structured approach to project management could be adapted to roles requiring general data handling and strategic thinking."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 18,
+              "background_match": 0,
+              "skills_overlap": 10,
+              "experience_relevance": 5,
+              "seniority": 3,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "This role involves building and maintaining relationships with key restaurant partners for Uber Eats in Denmark. It focuses on leading the sales cycle, negotiating agreements, and driving growth through strategic account management and data-driven decisions.",
+            "keywords": [
+              "Sales",
+              "Account Management",
+              "Business Development",
+              "Negotiation",
+              "Partner Growth"
+            ],
+            "fit_bullets": [
+              "The candidate has experience in \"Data Translation & Consulting\" at Illuminera (IQVIA), involving quantitative market research and translating results into actionable insights for pharmaceutical clients, which shows some client-facing exposure and strategic thinking.",
+              "Chunxu lists \"Client Engagement\" as a soft skill and gained experience in \"Client and KOLs Engagement\" at Illuminera, demonstrating an ability to build professional relationships and coordinate with stakeholders, which is relevant for account management.",
+              "The CV highlights \"Strong analytical skills\" developed through various projects and coursework, aligning with the job's requirement for \"Demonstrated strong analytical skills for data-driven decision-making.\""
+            ],
+            "connector": "While Chunxu's primary background is in bioinformatics and research, their limited internship experience in consulting, along with stated soft skills in client engagement and strong analytical abilities, offer a foundational, albeit indirect, connection to the client-facing and data-driven aspects of this Enterprise Account Manager role."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 48,
+              "background_match": 0,
+              "skills_overlap": 18,
+              "experience_relevance": 5,
+              "seniority": 10,
+              "language_requirement": 10,
+              "company_score": 5
+            },
+            "summary": "This entry-level Product Operations Manager position at HelloFresh involves overseeing the company's market products in the Nordics. The role focuses on collaborating with various teams, analyzing product performance, and driving innovation to enhance the customer offering.",
+            "keywords": [
+              "Product Operations",
+              "Market Management",
+              "Stakeholder Management",
+              "Data Analysis",
+              "Innovation"
+            ],
+            "fit_bullets": [
+              "Candidate demonstrates strong analytical and data interpretation skills, relevant for tracking performance and identifying optimization opportunities.",
+              "Experience in client engagement and tailoring communication to stakeholders aligns with the need for strong influencing and stakeholder management in the role.",
+              "Background in market research and formulating actionable strategies from the consulting internship provides a foundation for business acumen and strategic initiatives."
+            ],
+            "connector": "While the candidate's core domain is bioinformatics and pharma, their demonstrated abilities in data-driven decision-making, project coordination, and cross-functional collaboration offer transferable skills applicable to the operational challenges of product management at HelloFresh."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 13,
+              "background_match": 0,
+              "skills_overlap": 10,
+              "experience_relevance": 2,
+              "seniority": 0,
+              "language_requirement": 0,
+              "company_score": 1
+            },
+            "summary": "This role is for an Inside Account Executive focused on Small & Medium Businesses in Norway, responsible for managing sales opportunities, collaborating with partners, and achieving sales targets for Cisco products. It requires strong relationship management and accountability for deal closure.",
+            "keywords": [
+              "Sales",
+              "Account Management",
+              "SMB",
+              "Partner Collaboration",
+              "SFDC",
+              "Quota",
+              "Norwegian"
+            ],
+            "fit_bullets": [
+              "The candidate has experience as a Consulting Intern where they conducted market research and engaged with clients for pharmaceutical companies.",
+              "Chunxu demonstrates soft skills such as communication, teamwork, and client engagement, which are valuable for partner and customer interactions.",
+              "Experience with data-driven deliverables and transforming complex data into actionable insights could be tangentially applied to understanding sales performance metrics."
+            ],
+            "connector": "While Chunxu's primary expertise lies in bioinformatics research, their past consulting internship provided an introduction to client-facing roles and market analysis within a business context, offering a foundational, albeit limited, link to the strategic and relationship-driven aspects of this sales position."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 39,
+              "background_match": 0,
+              "skills_overlap": 15,
+              "experience_relevance": 8,
+              "seniority": 2,
+              "language_requirement": 9,
+              "company_score": 5
+            },
+            "summary": "This role is for a Presales Lead in Cybersecurity at Capgemini, focusing on engaging clients to understand their business challenges and proposing Capgemini's Cloud and Infrastructure solutions, particularly in cybersecurity, PAM, and IAM. The position requires a techno-functional leader who can drive strategic opportunities, build client relationships, and leverage AI/automation principles to deliver compelling solutions.",
+            "keywords": [
+              "Cybersecurity",
+              "Presales",
+              "Cloud Solutions",
+              "IAM/PAM",
+              "Client Engagement",
+              "IT Consulting"
+            ],
+            "fit_bullets": [
+              "The candidate's Consulting Intern role at Illuminera (IQVIA) provided experience in client engagement, market research, and translating insights, which is relevant to understanding client needs in a presales capacity.",
+              "Demonstrated an AI-driven mindset through coursework and applying AI/ML approaches in thesis work, aligning with the job's requirement for knowledge in Agentic AI and automation principles.",
+              "Experience in software development and maintaining complex bioinformatics pipelines showcases strong technical problem-solving and an ability to learn and adapt to new tools and systems."
+            ],
+            "connector": "While the candidate's core domain is bioinformatics, their experience in client engagement, applying AI/ML, and developing complex technical solutions demonstrates transferable skills in understanding business needs and technical problem-solving relevant to this role."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 48,
+              "background_match": 3,
+              "skills_overlap": 20,
+              "experience_relevance": 15,
+              "seniority": 10,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "This role is with the Danish Security and Intelligence Service (PET) in counter-espionage, focusing on protecting Danish interests from Russian threats. It requires individuals with sharp analytical skills, curiosity about global security, and the ability to solve complex problems in a covert and dynamic operational environment, potentially involving large datasets.",
+            "keywords": [
+              "Counter-espionage",
+              "analytical",
+              "data analysis",
+              "national security",
+              "geopolitical"
+            ],
+            "fit_bullets": [
+              "The candidate possesses strong analytical skills and experience in navigating and managing large datasets, developing complex bioinformatics pipelines, and performing data quality control.",
+              "Experience in fast-paced research environments with ad-hoc tasks, prioritization, and teamwork aligns with the job's need for adaptability, detail focus, and collaborative problem-solving.",
+              "Soft skills such as communication, teamwork, critical thinking, and a strong work ethic are highly relevant for a high-stakes, collaborative intelligence environment."
+            ],
+            "connector": "While the candidate's professional background is rooted in bioinformatics and the biotech industry, their demonstrated capacity for rigorous data analysis, intricate problem-solving, and adaptability could potentially be leveraged within the demanding and analytical context of national security at PET."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 30,
+              "background_match": 1,
+              "skills_overlap": 10,
+              "experience_relevance": 5,
+              "seniority": 10,
+              "language_requirement": 0,
+              "company_score": 4
+            },
+            "summary": "This position is for an administrative officer at the Nationalt Genom Center, a government body responsible for managing genomic data for personalized medicine in Denmark. The role focuses on diverse administrative tasks, case handling, secretarial support, and coordinating with various stakeholders and internal teams. It requires strong organizational and communication skills within a fast-paced public sector environment.",
+            "keywords": [
+              "Genomics",
+              "Sagsbehandling",
+              "Administration",
+              "Sundhedsdatastyrelsen",
+              "Koordination"
+            ],
+            "fit_bullets": [
+              "The candidate has experience in data organization, project management (BSc thesis), and managing ad-hoc tasks, which are transferable to the administrative and coordination responsibilities of the role.",
+              "Their Master's in Bioinformatics and Systems Biology, with work on genomics-related projects, provides a relevant domain understanding for the Nationalt Genom Center's mission.",
+              "The CV highlights strong soft skills such as communication, teamwork, and problem-solving, which are crucial for stakeholder engagement and collaboration mentioned in the job description."
+            ],
+            "connector": "Although the candidate's background is primarily in technical bioinformatics research, their demonstrated abilities in project coordination, data organization, and collaborative work offer potential contributions to the administrative and operational needs of the Nationalt Genom Center."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 1,
+              "background_match": 0,
+              "skills_overlap": 1,
+              "experience_relevance": 0,
+              "seniority": 0,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "This role is for a psychologist or organizational psychologist within the Danish Security and Intelligence Service (PET), focusing on enhancing employee well-being through supervision and preventative measures. The position involves both individual and group supervision, contributing to an inspiring work environment within a complex operational context.",
+            "keywords": [
+              "Psychologist",
+              "Supervision",
+              "Employee Well-being",
+              "Organizational Development",
+              "Operational Context"
+            ],
+            "fit_bullets": [
+              "The candidate's background is primarily in bioinformatics and data science, which does not align with the core requirements for a psychologist role.",
+              "The candidate lacks direct experience in psychological supervision, organizational development, or psychotraumatology as specified in the job description."
+            ],
+            "connector": "While the candidate demonstrates strong analytical and technical skills in bioinformatics, these do not directly translate to the psychological expertise and supervisory experience required for this role within the PET."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 5,
+              "background_match": 0,
+              "skills_overlap": 0,
+              "experience_relevance": 0,
+              "seniority": 0,
+              "language_requirement": 5,
+              "company_score": 0
+            },
+            "summary": "The Senior Authorised Person at Mercury is a lead electrical position responsible for implementing and managing electrical safety rules and systems across data center construction projects in Copenhagen. This involves overseeing hazardous energy control, safety permits, switching plans for HV/MV/LV systems, and ensuring compliance with all jurisdictional and company safety standards.",
+            "keywords": [
+              "Electrical Safety",
+              "Authorised Person",
+              "Data Centres",
+              "Switching Plans",
+              "Compliance"
+            ],
+            "fit_bullets": [
+              "Experience in a GMP-regulated Quality Control lab demonstrates an understanding of compliance and adherence to regulatory standards, which is a transferable skill to safety protocols.",
+              "Developed strong problem-solving and teamwork skills through various academic and research projects, which are crucial for managing complex safety procedures and collaborating with cross-functional teams.",
+              "Managed diverse tasks and prioritized work effectively in a fast-paced research environment, skills that are relevant for organizing and executing safety initiatives."
+            ],
+            "connector": "While Chunxu Han's core technical expertise lies in bioinformatics and the pharmaceutical sector, their experience with regulated environments, problem-solving, and managing complex tasks could provide a foundational understanding for structured safety protocols and contributing to a compliant work environment."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 1,
+              "background_match": 0,
+              "skills_overlap": 1,
+              "experience_relevance": 0,
+              "seniority": 0,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "This role is for an ambitious Area Manager in Copenhagen Municipality's Social Administration, leading support, employment, and housing initiatives for vulnerable citizens. The position involves strategic leadership, managing teams and budgets, and driving the development of social services.",
+            "keywords": [
+              "Social Services",
+              "Leadership",
+              "Public Administration",
+              "Team Management",
+              "Strategic Development"
+            ],
+            "fit_bullets": [
+              "The candidate demonstrates strong general soft skills such as communication, teamwork, and critical thinking through various academic and intern roles.",
+              "Experience in project management and working with stakeholders in previous roles indicates an ability to organize work and collaborate, though not at a director level."
+            ],
+            "connector": "While the candidate's background is strongly rooted in bioinformatics and the biotech industry, their experience includes transferable soft skills such as communication, teamwork, and client engagement that are broadly valuable in professional settings."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 31,
+              "background_match": 0,
+              "skills_overlap": 7,
+              "experience_relevance": 7,
+              "seniority": 10,
+              "language_requirement": 0,
+              "company_score": 7
+            },
+            "summary": "The Sales Development Representative role at Brandwatch, a Cision company, is an entry-level position focused on generating new business opportunities. This involves researching and engaging potential customers, performing extensive outbound activities, and collaborating with Account Executives to qualify leads and build a sales pipeline in the software development industry.",
+            "keywords": [
+              "Sales Development",
+              "Lead Generation",
+              "SaaS",
+              "Outbound Sales",
+              "Client Engagement"
+            ],
+            "fit_bullets": [
+              "The candidate's Consulting Intern experience involved client engagement, market research, and translating insights, which aligns with initiating customer interactions and understanding client needs.",
+              "Strong soft skills like \"Communication,\" \"Teamwork,\" and \"Client Engagement\" are listed in the CV, which are crucial for a client-facing sales development role.",
+              "The candidate's documented \"Motivation and determination to succeed\" and \"Ability to execute and take responsibility\" align with the drive required for a quota-driven sales environment."
+            ],
+            "connector": "While the candidate's core background is in bioinformatics and biotechnology, their experience in client engagement, communication, and a results-oriented approach from a consulting internship demonstrates a foundational readiness for the interpersonal and strategic demands of a sales development position."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 14,
+              "background_match": 0,
+              "skills_overlap": 5,
+              "experience_relevance": 0,
+              "seniority": 8,
+              "language_requirement": 1,
+              "company_score": 0
+            },
+            "summary": "This role is for a technical profile within the Danish Security and Intelligence Service (PET), focused on developing, operating, and maintaining technical tools for tactical operational support. The position involves identifying operational needs, advising leadership on technical possibilities, and coordinating with various partners to enhance national security.",
+            "keywords": [
+              "operational support",
+              "technical tools",
+              "security",
+              "intelligence",
+              "IT"
+            ],
+            "fit_bullets": [
+              "The candidate possesses strong foundational programming skills (Python, Bash, SQL) and a broad interest in IT, which are relevant for technical development and maintenance roles.",
+              "Experience in developing and maintaining complex software and pipelines showcases a structured approach to technical problem-solving and project execution.",
+              "Demonstrated soft skills such as communication, teamwork, and critical thinking align with the collaborative and demanding environment of the role."
+            ],
+            "connector": "While the candidate's direct experience is in bioinformatics and the pharmaceutical sector, their robust technical foundation in programming, data management, and problem-solving provides a transferable skill set that could be applied to the technical demands of operational support within PET."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 5,
+              "background_match": 0,
+              "skills_overlap": 5,
+              "experience_relevance": 0,
+              "seniority": 0,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "This role is for an experienced Senior UX Designer at IDA, Denmark's largest trade union, focusing on translating strategic visions into user-friendly digital solutions. The position emphasizes Journey Management, user insights, and ensuring cohesive user experiences across various digital platforms within cross-functional scrum teams.",
+            "keywords": [
+              "UX Design",
+              "Journey Management",
+              "User Experience",
+              "Digital Solutions",
+              "Scrum Teams"
+            ],
+            "fit_bullets": [
+              "Candidate possesses strong analytical skills from data collection, curation, and pipeline development in bioinformatics, which could be generally transferable to data-driven problem-solving.",
+              "Experience in software development and maintenance, along with problem-solving within technical contexts, demonstrates an ability to contribute to the development of digital solutions.",
+              "Strong communication, teamwork, and client engagement skills, developed through academic and consulting roles, are valuable for collaboration in cross-functional teams."
+            ],
+            "connector": "While the candidate's background is primarily in bioinformatics and scientific research, their general abilities in software development, data analysis, and cross-functional collaboration represent foundational skills that could be adapted to roles involving digital solutions and team-based development."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 22,
+              "background_match": 0,
+              "skills_overlap": 12,
+              "experience_relevance": 0,
+              "seniority": 10,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "This graduate position in Nykredit's Credit department involves evaluating customer financial robustness and creditworthiness, or analyzing the characteristics and quality of loan portfolios. It is a 10-month structured program designed for recent master's graduates to contribute to risk management within a major Danish bank.",
+            "keywords": [
+              "Credit analysis",
+              "Financial data",
+              "Graduate program",
+              "Banking"
+            ],
+            "fit_bullets": [
+              "Possesses strong data analysis, programming (Python, R, SQL), and data management skills, which are fundamental for quantitative roles.",
+              "Has developed an AI-driven mindset and problem-solving abilities through academic projects and research assistant roles.",
+              "As a master's student completing studies, the candidate perfectly matches the educational requirement for this graduate position."
+            ],
+            "connector": "While the candidate's professional background is distinct from the financial sector, their robust analytical toolkit and readiness for new challenges present a foundation for data-intensive roles. However, their expressed career ambition is firmly within the Pharmaceutical or Biotech industry."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 15,
+              "background_match": 0,
+              "skills_overlap": 5,
+              "experience_relevance": 0,
+              "seniority": 0,
+              "language_requirement": 10,
+              "company_score": 0
+            },
+            "summary": "This is a mid-senior level Regional Controller position at Joe & The Juice, responsible for overseeing all financial aspects, including reporting, compliance, and internal controls, for a specific geographical region. The role involves driving financial performance, providing strategic guidance to business leaders, and supporting the finance function's transformation for a potential IPO.",
+            "keywords": [
+              "Financial Controlling",
+              "IFRS Compliance",
+              "Financial Reporting",
+              "Internal Controls",
+              "Stakeholder Management"
+            ],
+            "fit_bullets": [
+              "The candidate possesses strong analytical and data processing skills, demonstrated through their work in bioinformatics and database management.",
+              "Experience in client engagement and cross-functional teamwork, particularly during a consulting internship, aligns with the collaboration and stakeholder management aspects of the role."
+            ],
+            "connector": "Although the candidate's technical background is in life sciences, their analytical mindset and experience in managing data and collaborating with diverse teams reflect a capacity for structured problem-solving that could be transferred to a new domain."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 4,
+              "background_match": 0,
+              "skills_overlap": 2,
+              "experience_relevance": 0,
+              "seniority": 2,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "This role involves developing, maintaining, and identifying technical tools and solutions to support tactical operations within the Danish Security and Intelligence Service (PET). The position requires a technically proficient individual with experience from operational environments to contribute to national security efforts.",
+            "keywords": [
+              "Operational Support",
+              "Technical Development",
+              "Law Enforcement",
+              "National Security",
+              "Tactical Operations"
+            ],
+            "fit_bullets": [
+              "Possesses strong programming, data management, and software development skills which are foundational to technical roles.",
+              "Experience in developing and maintaining complex technical tools demonstrates a robust problem-solving and development mindset.",
+              "Has a track record of working in teams, prioritizing tasks, and critical thinking, which are essential for operational support roles."
+            ],
+            "connector": "While the candidate's direct experience is in the life sciences, their demonstrated aptitude for technical development, system maintenance, and analytical problem-solving could be re-directed towards supporting the operational needs of law enforcement."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 15,
+              "background_match": 0,
+              "skills_overlap": 3,
+              "experience_relevance": 0,
+              "seniority": 0,
+              "language_requirement": 10,
+              "company_score": 2
+            },
+            "summary": "This role is for a Senior Buyer of Women's Accessories at an e-commerce company, focusing on curating assortments, identifying new brands, and driving commercial growth in the Nordic region. The position involves strategic planning, supplier negotiations, and analyzing sales data within the fashion retail industry.",
+            "keywords": [
+              "Retail Buying",
+              "Fashion Accessories",
+              "Supplier Management",
+              "Market Analysis",
+              "Commercial Growth"
+            ],
+            "fit_bullets": [
+              "The candidate has experience in general data analysis and translating data into insights, which could be transferable to market data analysis.",
+              "The candidate has demonstrated strong communication and collaboration skills in previous roles, which are valuable for supplier and cross-functional team engagement."
+            ],
+            "connector": "While the candidate possesses strong analytical and communication skills, their specialized background in bioinformatics and biotech research does not align with the core requirements and industry focus of a Senior Buyer role in fashion retail."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 72,
+              "background_match": 6,
+              "skills_overlap": 24,
+              "experience_relevance": 22,
+              "seniority": 3,
+              "language_requirement": 9,
+              "company_score": 8
+            },
+            "summary": "This role is for a Senior Delivery Consultant at AWS Professional Services, tasked with collaborating with customers to design, implement, and manage complex, scalable, and secure AWS cloud solutions. The consultant acts as a trusted advisor, providing technical guidance, optimizing performance, and managing project risks throughout the cloud adoption journey.",
+            "keywords": [
+              "AWS",
+              "Cloud Architecture",
+              "Consulting",
+              "Solution Implementation",
+              "Technical Guidance"
+            ],
+            "fit_bullets": [
+              "The candidate possesses strong programming skills in Python, R, and SQL, and experience in developing and optimizing bioinformatics pipelines, which are foundational for implementing technical solutions.",
+              "Experience in database & data management, including HPC utilization and adherence to FAIR principles, demonstrates capability in handling large datasets relevant to cloud environments.",
+              "Consulting internship experience involved conducting market research, translating results into actionable insights for pharmaceutical clients, and client engagement, aligning with the advisory aspect of the role."
+            ],
+            "connector": "While the candidate's direct experience is rooted in bioinformatics and biotech, their robust background in developing complex computational frameworks, managing large datasets, and engaging with stakeholders positions them well to adapt their analytical and problem-solving skills to cloud solution delivery within AWS Professional Services."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 15,
+              "background_match": 0,
+              "skills_overlap": 3,
+              "experience_relevance": 1,
+              "seniority": 1,
+              "language_requirement": 10,
+              "company_score": 0
+            },
+            "summary": "This role is for a passionate and driven Senior Buyer focusing on Women’s Accessories, Bags & Jewellery within a dynamic e-tail business. The position involves curating assortments, discovering new brands, driving commercial growth across the Nordics, and managing supplier relationships.",
+            "keywords": [
+              "Fashion Accessories",
+              "Buyer",
+              "Retail",
+              "E-commerce",
+              "Supplier Negotiation"
+            ],
+            "fit_bullets": [
+              "Possesses a strong analytical mindset developed through extensive bioinformatics data analysis, which could be applied to market and sales data.",
+              "Demonstrated communication and client engagement skills from a consulting internship, useful for supplier relationships and cross-functional collaboration."
+            ],
+            "connector": "While the candidate's primary experience lies in bioinformatics and biotech, the transferable analytical, communication, and problem-solving skills could potentially be leveraged in a commercially-focused role, albeit in a different industry."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 52,
+              "background_match": 2,
+              "skills_overlap": 20,
+              "experience_relevance": 15,
+              "seniority": 10,
+              "language_requirement": 0,
+              "company_score": 5
+            },
+            "summary": "This is an entry-level maternity cover position as an ESG Manager at a pension fund. The role focuses on integrating sustainability and responsible investment principles across various asset classes, involving data analysis, reporting, and stakeholder dialogue to ensure compliance with the company's sustainability policies.",
+            "keywords": [
+              "ESG",
+              "responsible investment",
+              "sustainability",
+              "pension fund",
+              "data analysis",
+              "reporting"
+            ],
+            "fit_bullets": [
+              "Candidate has experience with SQL, a preferred skill for the role's data analysis and reporting tasks.",
+              "Experience in data translation and consulting, where they learned to convert analytical findings into actionable insights for pharmaceutical clients, which is transferable to reporting on responsible investments.",
+              "Strong soft skills including communication, teamwork, and client engagement, which are explicitly sought for collaboration and stakeholder dialogue."
+            ],
+            "connector": "While the candidate's primary background is in bioinformatics and biotech, their proven analytical skills, experience with data management and reporting, and ability to communicate complex information effectively are directly relevant to the ESG Manager role's focus on data-driven sustainability reporting and stakeholder engagement."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 28,
+              "background_match": 0,
+              "skills_overlap": 15,
+              "experience_relevance": 5,
+              "seniority": 8,
+              "language_requirement": 0,
+              "company_score": 0
+            },
+            "summary": "This role is for a Space Manager at Copenhagen University College, focusing on optimizing space utilization across various campus locations. The position involves project management, data analysis, and collaboration with a multidisciplinary team to ensure efficient and user-centric building environments for students and staff.",
+            "keywords": [
+              "Space Management",
+              "Project Management",
+              "Facilities",
+              "Higher Education",
+              "Data Analysis"
+            ],
+            "fit_bullets": [
+              "The candidate's extensive experience in data management, pipeline development, and analytical problem-solving demonstrates a structured and data-driven approach, which is a key requirement for space management.",
+              "The candidate has experience in project management through academic projects and internships, managing timelines and collaborating with various stakeholders.",
+              "The candidate's consulting experience with \"Data-Driven Deliverables\" and \"tailoring the deliverables according to audiences and stakeholders\" aligns with the job's need for visual communication and clear user understanding."
+            ],
+            "connector": "While the candidate's background is in bioinformatics and biotech, their strong analytical, data management, and project coordination skills are transferable and could be valuable in optimizing facility spaces and managing projects within an educational institution."
+          }
+        }
+      },
+      {
+        "json": {
+          "output": {
+            "score": {
+              "overall": 14,
+              "background_match": 0,
+              "skills_overlap": 2,
+              "experience_relevance": 0,
+              "seniority": 4,
+              "language_requirement": 8,
+              "company_score": 0
+            },
+            "summary": "The Regional Supply Chain Manager oversees sourcing, procurement, and contract management for construction projects, particularly data centers, within a regional scope. This role involves acting as a client representative, managing RFP processes, coordinating with various project stakeholders, and ensuring procedural compliance and continuous improvement.",
+            "keywords": [
+              "Supply Chain Management",
+              "Procurement",
+              "Contracts",
+              "Construction",
+              "Project Management"
+            ],
+            "fit_bullets": [
+              "The candidate's \"Consulting Intern\" experience at Illuminera (IQVIA) involved client engagement and translating insights, which could be broadly applicable to stakeholder communication.",
+              "Possesses soft skills such as \"Communication,\" \"Teamwork,\" and \"Multitasking\" that are relevant to coordinating project activities and collaborating with diverse teams."
+            ],
+            "connector": "Despite a primary focus on bioinformatics, the candidate's previous exposure to client-facing roles and general professional soft skills may offer minimal transferable value to the collaborative aspects of supply chain management."
+          }
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "MapResume",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Linkedin": {
+      "main": [
+        [
+          {
+            "node": "NormalizeData",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score the job and extract": {
+      "main": [
+        [
+          {
+            "node": "Parse LLM JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "RetrieveCV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RetrieveCV": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NormalizeData": {
+      "main": [
+        [
+          {
+            "node": "Filter and deduplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter and deduplicate": {
+      "main": [
+        [
+          {
+            "node": "Prepare AI Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MapResume": {
+      "main": [
+        [
+          {
+            "node": "Linkedin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Score the job and extract",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Replace Me",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Replace Me": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Score the job and extract",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Score the job and extract",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare AI Input": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge Scores + Meta",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge Scores + Meta": {
+      "main": [
+        [
+          {
+            "node": "Rank by Overall Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse LLM JSON": {
+      "main": [
+        [
+          {
+            "node": "Merge Scores + Meta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rank by Overall Score": {
+      "main": [
+        [
+          {
+            "node": "Top 15 Slice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Top 15 Slice": {
+      "main": [
+        [
+          {
+            "node": "Build Email HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Email HTML": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "d44f71d8-67b1-4f50-ae10-fa4a2a2f5cce",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "31bc6f8abfb555d0c69c29cee0ff3dbf5cc12cef3572d2bfc80270a06e3df956"
+  },
+  "id": "b1A8S2HwTPjaJOWK",
+  "tags": []
+}
